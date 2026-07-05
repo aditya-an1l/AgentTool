@@ -1,4 +1,4 @@
 openai>=1.0.0
-duckduckgo-search>=5.0.0
+ddgs>=6.0.0
 rich>=13.0.0
 requests>=2.28.0
