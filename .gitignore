@@ -146,3 +146,11 @@ cython_debug/
 *.sln
 *.swp
 .DS_Store
+
+# Project workflow files (AI-readable, not committed)
+docs/
+AGENT.md
+CONTEXT.json
+TODO.md
+update.md
+log.md
