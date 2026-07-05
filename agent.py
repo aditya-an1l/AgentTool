@@ -17,6 +17,7 @@ from typing import Any, Dict, List, Tuple
 
 import requests
 from rich import box
+from rich.align import Align
 from rich.console import Console
 from rich.markdown import Markdown
 from rich.panel import Panel
@@ -282,7 +283,7 @@ def run_agent_loop(
         {"role": "system", "content": system_prompt},
     ]
 
-    console.print(
+    console.print(Align.center(
         Panel(
             "[bold green]◆ Agent ready.[/]  Type [cyan]exit[/] or press [cyan]Ctrl+C[/] to quit.\n"
             "[dim]Enter your prompt below to start chatting with the model.[/]",
@@ -290,7 +291,7 @@ def run_agent_loop(
             box=box.HEAVY,
             style="green",
         )
-    )
+    ))
 
     while True:
         try:
@@ -315,28 +316,28 @@ def run_agent_loop(
 
 
 def main() -> None:
-    console.print(
+    console.print(Align.center(
         Panel(
             "\n"
-            "  [bold cyan]::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::[/]\n"
-            "  [bold cyan]::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::[/]\n"
-            "  [bold cyan]:::::::::::::::::::::::::::::::%::::::::::::::::::::::::::::::::[/]\n"
-            "  [bold cyan]::::::::::::::::::::::::::::::%%%=::::::::::::::::::::::::::::::[/]\n"
-            "  [bold cyan]:::::::::::::::::::::::::::%%%%%*:%%%%::::::::::::::::::::::::::[/]\n"
-            "  [bold cyan]::::::::::::::::::::::::::::::%:+%::::::::::::::::::::::::::::::[/]\n"
-            "  [bold cyan]:::::::::::::::::::::::::::::%:::%%%-::::::::::::::::::::::::::[/]\n"
-            "  [bold cyan]::::::::::::::::::::::::::*%%%%%%%%#%%:::::::::::::::::::::::::[/]\n"
-            "  [bold cyan]:::::::::::::::::::::::::%%%::::::::%%%:::::::::::::::::::::::::[/]\n"
-            "  [bold cyan]::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::[/]\n"
-            "  [bold cyan]::::::::::::::::::::=:::::::::::::::::::::::=:::::::::::::::::::[/]\n"
+            "[bold cyan]::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::[/]\n"
+            "[bold cyan]::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::[/]\n"
+            "[bold cyan]:::::::::::::::::::::::::::::::%::::::::::::::::::::::::::::::::[/]\n"
+            "[bold cyan]::::::::::::::::::::::::::::::%%%=::::::::::::::::::::::::::::::[/]\n"
+            "[bold cyan]:::::::::::::::::::::::::::%%%%%*:%%%%::::::::::::::::::::::::::[/]\n"
+            "[bold cyan]::::::::::::::::::::::::::::::%:+%::::::::::::::::::::::::::::::[/]\n"
+            "[bold cyan]:::::::::::::::::::::::::::::%:::%%%-::::::::::::::::::::::::::[/]\n"
+            "[bold cyan]::::::::::::::::::::::::::*%%%%%%%%#%%:::::::::::::::::::::::::[/]\n"
+            "[bold cyan]:::::::::::::::::::::::::%%%::::::::%%%:::::::::::::::::::::::::[/]\n"
+            "[bold cyan]::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::[/]\n"
+            "[bold cyan]::::::::::::::::::::=:::::::::::::::::::::::=:::::::::::::::::::[/]\n"
             "\n"
-            "  [bold yellow]Terminal-based Agentic Coding Assistant[/]\n"
+            "[bold yellow]Terminal-based Agentic Coding Assistant[/]\n"
             "\n"
-            "  [green]◆[/] Discover local LLMs — [bold]Ollama[/] & [bold]LM Studio[/]\n"
-            "  [green]◆[/] Interactive tool-calling chat loop\n"
-            "  [green]◆[/] Web search · File I/O · Command execution\n"
+            "[green]◆[/] Discover local LLMs — [bold]Ollama[/] & [bold]LM Studio[/]\n"
+            "[green]◆[/] Interactive tool-calling chat loop\n"
+            "[green]◆[/] Web search · File I/O · Command execution\n"
             "\n"
-            "  [dim]Get started by selecting a model below.[/]\n"
+            "[dim]Get started by selecting a model below.[/]\n"
             "\n",
             title="[bold white]Welcome to AgentTool[/]",
             subtitle="[dim]Powered by Ollama & LM Studio[/]",
@@ -344,7 +345,7 @@ def main() -> None:
             style="bright_blue",
             padding=(1, 2),
         )
-    )
+    ))
 
     models = discover_models()
     if not models:
