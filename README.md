@@ -11,9 +11,9 @@
     <a href="https://github.com/aditya-an1l/AgentTool/pulse">
       <img alt="Last commit" src="https://img.shields.io/github/last-commit/aditya-an1l/AgentTool?style=for-the-badge&logo=git&color=1DA1F2&logoColor=FFFFFF&labelColor=000000"/>
     </a>
-    <a href="https://github.com/aditya-an1l/AgentTool/blob/main/LICENSE">
-      <img alt="License" src="https://img.shields.io/github/license/aditya-an1l/AgentTool?style=for-the-badge&logo=apache&color=FF4136&logoColor=FFFFFF&labelColor=000000" />
-    </a>
+<a href="https://github.com/aditya-an1l/AgentTool/blob/main/LICENSE">
+  <img alt="License" src="https://img.shields.io/badge/license-Apache%202.0-blue?style=for-the-badge&logo=apache" />
+</a>
     <a href="https://github.com/aditya-an1l/AgentTool/stargazers">
       <img alt="Stars" src="https://img.shields.io/github/stars/aditya-an1l/AgentTool?style=for-the-badge&logo=starship&color=1DA1F2&logoColor=FFFFFF&labelColor=000000" />
     </a>
