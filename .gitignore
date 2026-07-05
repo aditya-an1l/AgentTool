@@ -1,0 +1,148 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Distribution / packaging
+bin/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# PyInstaller
+# Usually these files are written by a python script from a template
+# before PyInstaller builds the exe, so as to inject date/other infos into it.
+*.manifest
+*.spec
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Unit test / coverage reports
+htmlcov/
+.toml
+.cache
+.pytest_cache/
+.testmondata
+.hypothesis/
+.r區域_cache/
+.ruff_cache/
+
+# Translations
+*.mo
+*.pot
+
+# Django stuff:
+*.log
+local_settings.py
+db.sqlite3
+db.sqlite3-journal
+
+# Flask stuff:
+instance/
+.webassets-cache
+
+# Scrapy stuff:
+.scrapy
+
+# Sphinx documentation
+docs/_build/
+
+# PyBuilder
+.pybuilder/
+target/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# IPython
+.ipython/
+
+# pyenv
+#   For a library or package, you might want to ignore these files since the Python version is
+#   managed by the end user. For a specific application, you may want to commit them.
+# .python-version
+
+# pipenv
+#   According to pypa/pipenv#1173, pipenv manages the dependencies via Pipfile.lock.
+#   For an application, you should commit Pipfile.lock.
+#   For a library, you should avoid committing Pipfile.lock.
+# Pipfile.lock
+
+# poetry
+#   Similarly, Poetry manages dependencies via poetry.lock.
+#   For an application, you should commit poetry.lock.
+#   For a library, you should avoid committing poetry.lock.
+# poetry.lock
+
+# pdm
+#   PDM manages dependencies via pdm.lock, similar to Poetry and Pipenv
+# pdm.lock
+.pdm-plugins/
+
+# venv / Virtual Environments
+#   It is best practice to keep your virtual environment separate from your code.
+#   This ensures you do not accidentally commit huge dependency folders.
+venv/
+.venv/
+env/
+.env/
+ENV/
+env.bak/
+venv.bak/
+
+# Environment variables / Credentials
+#   NEVER commit sensitive credentials, API keys, or passwords.
+.env
+.env.*
+.secrets
+*.pem
+
+# Spyder project settings
+.spyderproject
+.spyproject
+
+# Rope project settings
+.ropeproject
+
+# mkdocs documentation
+/site
+
+# mypy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Pyre type checker
+.pyre/
+
+# cython debug
+cython_debug/
+
+# IDEs and Code Editors (Optional but highly recommended)
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.swp
+.DS_Store
