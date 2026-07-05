@@ -12,7 +12,7 @@ import subprocess
 from pathlib import Path
 from typing import Any, Dict, List
 
-from duckduckgo_search import DDGS
+from ddgs import DDGS
 
 TOOL_DEFINITIONS: List[Dict[str, Any]] = [
     {
