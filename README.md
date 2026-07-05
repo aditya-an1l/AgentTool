@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="https://raw.githubusercontent.com/aditya-an1l/AgentTool/main/media/logo.png" width="250" height="250" alt="AgentTool Logo">
+  <img src="https://raw.githubusercontent.com/aditya-an1l/AgentTool/main/media/logo.jpeg" width="250" height="250" alt="AgentTool Logo">
 </div>
 <div align="center">
   <h1>AgentTool</h1>
