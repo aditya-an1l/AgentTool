@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Terminal-based Agentic Coding Assistant.
+AgentTool: Terminal-based Agentic Coding Assistant.
 
 * Discovers local LLM servers (Ollama & LM Studio).
 * Lets the user pick a model via a Rich UI.
@@ -37,7 +37,6 @@ console = Console()
 def _fetch_ollama_models() -> List[Tuple[str, str]]:
     """
     Return a list of (model_name, base_url) for Ollama.
-    Base URL for API calls is ``http://localhost:11434/v1``.
     """
     url = "http://localhost:11434/api/tags"
     try:
@@ -54,7 +53,6 @@ def _fetch_ollama_models() -> List[Tuple[str, str]]:
 def _fetch_lmstudio_models() -> List[Tuple[str, str]]:
     """
     Return a list of (model_name, base_url) for LM Studio.
-    Base URL for API calls is ``http://localhost:1234/v1``.
     """
     url = "http://localhost:1234/v1/models"
     try:
