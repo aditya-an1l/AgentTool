@@ -331,9 +331,9 @@ def main() -> None:
             "\n"
             "[bold yellow]Terminal-based Agentic Coding Assistant[/]\n"
             "\n"
-            "[green]◆[/] Discover local LLMs — [bold]Ollama[/] & [bold]LM Studio[/]\n"
-            "[green]◆[/] Interactive tool-calling chat loop\n"
-            "[green]◆[/] Web search · File I/O · Command execution\n"
+            "    [green]◆[/] Discover local LLMs — [bold]Ollama[/] & [bold]LM Studio[/]\n"
+            "    [green]◆[/] Interactive tool-calling chat loop\n"
+            "    [green]◆[/] Web search · File I/O · Command execution\n"
             "\n"
             "[dim]Get started by selecting a model below.[/]\n"
             "\n",
