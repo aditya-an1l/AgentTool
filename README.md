@@ -30,10 +30,18 @@
 </div>
 
 ## Overview
+<div align="center">
+<img width="818" height="624" alt="image" src="https://github.com/user-attachments/assets/c8fe424e-00ca-472e-a194-1dfc18cdf4ee" />
+</div>
 
 AgentTool is a lightweight Python CLI that discovers locally-running LLM servers (Ollama or LM Studio), lets you pick a model, and then runs an OpenAI-compatible **agentic loop** with tool-calling capabilities. It acts as a meta-agent: it auto-discovers models, provides an interactive selection menu, and powers an agentic tool-calling loop with web search, file operations, and shell command execution.
 
 ## Features
+
+<div align="center">
+<img width="1913" height="520" alt="image" src="https://github.com/user-attachments/assets/99aa7878-f405-4955-b78c-5a459c142852" />
+</div>
+
 
 - **Auto-detect** Ollama (`http://localhost:11434`) and LM Studio (`http://localhost:1234`) models.
 - Interactive selection UI powered by **Rich**.
