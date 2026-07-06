@@ -23,6 +23,10 @@ from rich.markdown import Markdown
 from rich.panel import Panel
 from rich.prompt import Prompt
 from rich.table import Table
+from prompt_toolkit import PromptSession
+from prompt_toolkit.history import InMemoryHistory
+from prompt_toolkit.key_binding import KeyBindings
+from prompt_toolkit.formatted_text import FormattedText
 from rich.traceback import install as install_rich_traceback
 
 from tools import (
@@ -276,26 +280,82 @@ def run_agent_loop(
     Prompts the user for input, sends it to the model, follows the
     tool-calling chain until a text answer arrives, and prints it.
     Loops until the user types *exit* / *quit* or presses Ctrl+C.
+
+    Input conventions:
+      · Enter              submit the prompt
+      · Alt+Enter          insert a new line (multi-line input)
+      · Ctrl+U / Ctrl+K    clear the current input line
+      · Ctrl+W              delete the last word
+      · Mouse click        position the cursor
     """
     messages: List[Dict[str, Any]] = [
         {"role": "system", "content": system_prompt},
     ]
 
-    console.print(Align.center(
-        Panel(
-            "[bold green]◆ Agent ready.[/]  Type [cyan]exit[/] or press [cyan]Ctrl+C[/] to quit.\n"
-            "[dim]Enter your prompt below to start chatting with the model.[/]",
-            title="[bold white]Session[/]",
-            box=box.HEAVY,
-            style="green",
+    kb = KeyBindings()
+
+    @kb.add("enter")
+    def _(event):
+        """Submit the prompt."""
+        event.current_buffer.validate_and_handle()
+
+    @kb.add("escape", "enter")
+    def _(event):
+        """Insert a new line (Alt+Enter)."""
+        event.current_buffer.insert_text("\n")
+
+    @kb.add("c-u")
+    @kb.add("c-k")
+    def _(event):
+        """Clear the current input line."""
+        event.current_buffer.text = ""
+
+    @kb.add("c-w")
+    def _(event):
+        """Delete the last word."""
+        buf = event.current_buffer
+        pos = buf.cursor_position
+        text = buf.text
+        if pos == 0:
+            return
+        count = 0
+        i = pos - 1
+        while i >= 0 and text[i] == " ":
+            count += 1
+            i -= 1
+        while i >= 0 and text[i] != " ":
+            count += 1
+            i -= 1
+        buf.delete_before_cursor(count)
+
+    session = PromptSession(
+        key_bindings=kb,
+        mouse_support=True,
+        history=InMemoryHistory(),
+    )
+
+    console.print(
+        Align.center(
+            Panel(
+                "[bold green]◆ Agent ready◆ [/]  Type [cyan]Exit[/] or press [cyan]Ctrl+C[/] to quit.\n\n"
+                "[dim] [cyan]Enter[/] = Submit | [cyan]Alt+Enter[/] = New Line | [cyan]Ctrl+U/K[/] = Clear | [cyan]Ctrl+W[/] = Delete Word[/]",
+                title="[bold white]Session[/]",
+                box=box.HEAVY,
+                style="green",
+            )
         )
-    ))
+    )
 
     while True:
         try:
-            user_input = Prompt.ask("[bold cyan]You[/]")
+            user_input = session.prompt(
+                FormattedText([("bold cyan", "You\n> ")]),
+            )
         except KeyboardInterrupt:
             console.print("\n[bold red]Interrupted — exiting.[/]")
+            return
+        except EOFError:
+            console.print("\n[bold red]Goodbye.[/]")
             return
 
         stripped = user_input.strip()
@@ -331,9 +391,9 @@ def main() -> None:
             "\n"
             "[bold yellow]Terminal-based Agentic Coding Assistant[/]\n"
             "\n"
-            "    [green]◆[/] Discover local LLMs — [bold]Ollama[/] & [bold]LM Studio[/]\n"
-            "    [green]◆[/] Interactive tool-calling chat loop\n"
-            "    [green]◆[/] Web search · File I/O · Command execution\n"
+            "[green]◆[/] Discover local LLMs — [bold]Ollama[/] & [bold]LM Studio[/]\n"
+            "[green]◆[/] Interactive tool-calling chat loop\n"
+            "[green]◆[/] Web search · File I/O · Command execution\n"
             "\n"
             "[dim]Get started by selecting a model below.[/]\n"
             "\n",
