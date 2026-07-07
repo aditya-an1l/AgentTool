@@ -30,8 +30,8 @@ class TestFetchOllamaModels:
         }
         models = _fetch_ollama_models()
         assert models == [
-            ("[Ollama] llama3.1:8b", "http://localhost:11434/v1"),
-            ("[Ollama] qwen2.5-coder:7b", "http://localhost:11434/v1"),
+            ("[Ollama] llama3.1:8b", "llama3.1:8b", "http://localhost:11434/v1"),
+            ("[Ollama] qwen2.5-coder:7b", "qwen2.5-coder:7b", "http://localhost:11434/v1"),
         ]
 
     @patch("agent.requests.get", side_effect=Exception("Connection refused"))
@@ -47,7 +47,7 @@ class TestFetchLmStudioModels:
         }
         models = _fetch_lmstudio_models()
         assert models == [
-            ("[LM Studio] qwen2.5-coder-7b-instruct", "http://localhost:1234/v1")
+            ("[LM Studio] qwen2.5-coder-7b-instruct", "qwen2.5-coder-7b-instruct", "http://localhost:1234/v1")
         ]
 
     @patch("agent.requests.get", side_effect=Exception("Connection refused"))
@@ -63,8 +63,8 @@ class TestDiscoverModels:
         mock_lm: MagicMock,
         mock_ollama: MagicMock,
     ) -> None:
-        mock_ollama.return_value = [("[Ollama] a", "http://localhost:11434/v1")]
-        mock_lm.return_value = [("[LM Studio] b", "http://localhost:1234/v1")]
+        mock_ollama.return_value = [("[Ollama] a", "a", "http://localhost:11434/v1")]
+        mock_lm.return_value = [("[LM Studio] b", "b", "http://localhost:1234/v1")]
         result = discover_models()
         assert len(result) == 2
 
