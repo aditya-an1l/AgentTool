@@ -13,7 +13,7 @@ from __future__ import annotations
 import json
 import re
 import sys
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Tuple, Optional
 
 import requests
 from rich import box
@@ -39,9 +39,9 @@ install_rich_traceback(show_locals=False)
 console = Console()
 
 
-def _fetch_ollama_models() -> List[Tuple[str, str]]:
+def _fetch_ollama_models() -> List[Tuple[str, str, str]]:
     """
-    Return a list of (model_name, base_url) for Ollama.
+    Return a list of (display_name, model_id, base_url) for Ollama.
     """
     url = "http://localhost:11434/api/tags"
     try:
@@ -51,13 +51,16 @@ def _fetch_ollama_models() -> List[Tuple[str, str]]:
         return []  # Ollama not running / unreachable
 
     data = resp.json()
-    models = [f"[Ollama] {m['name']}" for m in data.get("models", [])]
-    return [(name, "http://localhost:11434/v1") for name in models]
+    models = [
+        (f"[Ollama] {m['name']}", m["name"], "http://localhost:11434/v1")
+        for m in data.get("models", [])
+    ]
+    return models
 
 
-def _fetch_lmstudio_models() -> List[Tuple[str, str]]:
+def _fetch_lmstudio_models() -> List[Tuple[str, str, str]]:
     """
-    Return a list of (model_name, base_url) for LM Studio.
+    Return a list of (display_name, model_id, base_url) for LM Studio.
     """
     url = "http://localhost:1234/v1/models"
     try:
@@ -68,28 +71,31 @@ def _fetch_lmstudio_models() -> List[Tuple[str, str]]:
 
     data = resp.json()
     # NOTE: LM Studio returns {"data": [{"id": "...", ...}], ...}
-    models = [f"[LM Studio] {m['id']}" for m in data.get("data", [])]
-    return [(name, "http://localhost:1234/v1") for name in models]
+    models = [
+        (f"[LM Studio] {m['id']}", m["id"], "http://localhost:1234/v1")
+        for m in data.get("data", [])
+    ]
+    return models
 
 
-def discover_models() -> List[Tuple[str, str]]:
+def discover_models() -> List[Tuple[str, str, str]]:
     """Combine Ollama and LM Studio model lists."""
     ollama = _fetch_ollama_models()
     lmstudio = _fetch_lmstudio_models()
     return ollama + lmstudio
 
 
-def _display_models(models: List[Tuple[str, str]]) -> None:
+def _display_models(models: List[Tuple[str, str, str]]) -> None:
     table = Table(title="Discovered Local LLM Models", box=box.SIMPLE)
     table.add_column("#", justify="right")
     table.add_column("Model", overflow="fold")
-    for idx, (name, _) in enumerate(models, start=1):
+    for idx, (name, _, _) in enumerate(models, start=1):
         table.add_row(str(idx), name)
     console.print(table)
 
 
-def pick_model(models: List[Tuple[str, str]]) -> Tuple[str, str]:
-    """Prompt the user to select a model; returns (model_name, base_url)."""
+def pick_model(models: List[Tuple[str, str, str]]) -> Tuple[str, str, str]:
+    """Prompt the user to select a model; returns (display_name, model_id, base_url)."""
     while True:
         try:
             choice = Prompt.ask(
@@ -417,7 +423,7 @@ def main() -> None:
         sys.exit(1)
 
     _display_models(models)
-    model_name, base_url = pick_model(models)
+    model_name, model_id, base_url = pick_model(models)
 
     console.print(f"Selected model: [green]{model_name}[/]")
     client = create_openai_client(base_url)
@@ -431,7 +437,7 @@ def main() -> None:
     )
 
     try:
-        run_agent_loop(client, model_name, system_prompt)
+        run_agent_loop(client, model_id, system_prompt)
     except KeyboardInterrupt:
         console.print("\n[bold red]Interrupted by user - exiting.[/]")
 
