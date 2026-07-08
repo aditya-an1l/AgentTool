@@ -159,8 +159,8 @@ def list_directory(path: str) -> str:
 
 
 _DANGEROUS_PATTERNS = [
-    "rm -rf", "rm -fr", "rm -r /",
-    ">", ">>", "dd if=", ":(){ :|:& };:",
+    "rm -rf /", "rm -fr /", "rm -r /",
+    ":(){ :|:& };:",
     "mkfs.", "fdisk", "dd if=",
 ]
 

@@ -30,6 +30,7 @@
 </div>
 
 ## Overview
+
 <div align="center">
 <img width="818" height="624" alt="image" src="https://github.com/user-attachments/assets/c8fe424e-00ca-472e-a194-1dfc18cdf4ee" />
 </div>
@@ -41,7 +42,6 @@ AgentTool is a lightweight Python CLI that discovers locally-running LLM servers
 <div align="center">
 <img width="1913" height="520" alt="image" src="https://github.com/user-attachments/assets/99aa7878-f405-4955-b78c-5a459c142852" />
 </div>
-
 
 - **Auto-detect** Ollama (`http://localhost:11434`) and LM Studio (`http://localhost:1234`) models.
 - Interactive selection UI powered by **Rich**.
@@ -98,23 +98,3 @@ python -m pytest tests/ -v
 - No real API key is required; a dummy key is supplied internally.
 - The script works with any OpenAI-compatible local endpoint (Ollama, LM Studio, etc.).
 - The maximum loop depth is limited to 10 iterations to avoid endless cycles.
-
-<!--
-# issues that needds to be resolved:
-# 1. Escape sequences for arrow keys are not handled properly in the prompt. 
-# For example, when the user presses the left or right arrow key, it produces 
-# characters like ^[[D and ^[[C instead of moving the cursor.
-#
-# 2. The prompt does not support multi-line input. If the user presses Enter, the input is submitted immediately, 
-# and there is no way to enter a multi-line prompt. A better approach would be to allow the user to have multi-line input, 
-# perhaps by using a different key combination to add a new line by the input  Shift+Enter, and then use Enter key to have
-# the prompt being submitted. In the run_agent_loop function,
-# mention that the user can use Shift+Enter for new line, and Enter for multi-line input.
-#
-# 3. Have the following keymaps
-#   - Ctrl+U or Ctrl+K to clear the current input line.
-#   - Ctrl+W or Ctrl+Backspace to delete the last word.
-#
-# 4. Mouse cursor support 
-# The user must be able to go to a specific part of the prompt by clicking on the any character in the prompt.
--->
