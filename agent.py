@@ -167,40 +167,6 @@ def format_tool_result(name: str, result: Any) -> str:
     return json.dumps({"tool_name": name, "result": result}, ensure_ascii=False)
 
 
-def _convert_response(raw_msg: Any) -> Dict[str, Any]:
-    """
-    Convert an OpenAI v1+ Pydantic ChatCompletionMessage object into a
-    plain dict so we can pass it to ``robust_tool_parse`` and append it
-    to the message history.
-    """
-    msg: Dict[str, Any] = {
-        "role": raw_msg.role if hasattr(raw_msg, "role") else "assistant",
-        "content": raw_msg.content if hasattr(raw_msg, "content") else None,
-    }
-
-    raw_calls = (
-        raw_msg.tool_calls
-        if hasattr(raw_msg, "tool_calls") and raw_msg.tool_calls
-        else []
-    )
-    tool_calls_list: List[Dict[str, Any]] = []
-    for tc in raw_calls:
-        tool_calls_list.append(
-            {
-                "id": tc.id,
-                "type": "function",
-                "function": {
-                    "name": tc.function.name,
-                    "arguments": tc.function.arguments,
-                },
-            }
-        )
-    if tool_calls_list:
-        msg["tool_calls"] = tool_calls_list
-
-    return msg
-
-
 def _process_tool_calls(
     calls: List[Dict[str, Any]],
     messages: List[Dict[str, Any]],
