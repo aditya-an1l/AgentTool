@@ -134,6 +134,40 @@ def create_openai_client(base_url: str) -> Any:
     return client
 
 
+def _json_subtree(text: str) -> str | None:
+    """Extract the first complete JSON object or array embedded in text."""
+    for opener, closer in [("{", "}"), ("[", "]")]:
+        start = text.find(opener)
+        if start == -1:
+            continue
+        depth = 0
+        for i in range(start, len(text)):
+            if text[i] == opener:
+                depth += 1
+            elif text[i] == closer:
+                depth -= 1
+                if depth == 0:
+                    candidate = text[start : i + 1]
+                    try:
+                        json.loads(candidate)
+                        return candidate
+                    except Exception:
+                        break
+    return None
+
+
+def _build_tool_call(namespace: str, args: Dict[str, Any]) -> Dict[str, Any]:
+    """Build a standardised tool call dict with a unique ID."""
+    return {
+        "id": f"call_{os.urandom(4).hex()}",
+        "type": "function",
+        "function": {
+            "name": namespace,
+            "arguments": json.dumps(args),
+        },
+    }
+
+
 def robust_tool_parse(msg: Dict[str, Any]) -> List[Dict[str, Any]]:
     """
     Extracts tool calls from native parameters, raw JSON text blocks,
@@ -146,6 +180,9 @@ def robust_tool_parse(msg: Dict[str, Any]) -> List[Dict[str, Any]]:
     if not content:
         return []
 
+    if content.startswith("INSTRUCTIONS:"):
+        return []
+
     tool_calls: List[Dict[str, Any]] = []
     clean_content = content.strip()
 
@@ -155,53 +192,80 @@ def robust_tool_parse(msg: Dict[str, Any]) -> List[Dict[str, Any]]:
         clean_content = clean_content[:-3]
     clean_content = clean_content.strip()
 
+    json_str = clean_content
     try:
-        parsed = json.loads(clean_content)
-        if isinstance(parsed, list):
-            for item in parsed:
-                if "name" in item:
-                    tool_calls.append({
-                        "id": f"call_{os.urandom(4).hex()}",
-                        "type": "function",
-                        "function": {
-                            "name": item["name"],
-                            "arguments": json.dumps(item.get("arguments", {})) if isinstance(item.get("arguments"), dict) else str(item.get("arguments", "{}"))
-                        }
-                    })
-            if tool_calls:
-                return tool_calls
-        elif isinstance(parsed, dict) and "name" in parsed:
-            tool_calls.append({
-                "id": f"call_{os.urandom(4).hex()}",
-                "type": "function",
-                "function": {
-                    "name": parsed["name"],
-                    "arguments": json.dumps(parsed.get("arguments", {})) if isinstance(parsed.get("arguments"), dict) else str(parsed.get("arguments", "{}"))
-                }
-            })
-            return tool_calls
+        json.loads(json_str)
     except Exception:
-        pass
+        extracted = _json_subtree(clean_content)
+        if extracted is not None:
+            json_str = extracted
+        else:
+            json_str = ""
 
-    for tool_name in ["web_search", "read_file", "write_file", "run_command"]:
+    if json_str:
+        try:
+            parsed = json.loads(json_str)
+            if isinstance(parsed, list):
+                for item in parsed:
+                    if "name" in item:
+                        args_raw = item.get("arguments", {})
+                        args = args_raw if isinstance(args_raw, dict) else {}
+                        tool_calls.append(
+                            _build_tool_call(item["name"], args)
+                        )
+                    elif "functionCall" in item and isinstance(item["functionCall"], dict):
+                        fc = item["functionCall"]
+                        if "name" in fc:
+                            params = fc.get("parameters") or fc.get("arguments") or {}
+                            params = params if isinstance(params, dict) else {}
+                            tool_calls.append(
+                                _build_tool_call(fc["name"], params)
+                            )
+                if tool_calls:
+                    return tool_calls
+            elif isinstance(parsed, dict):
+                if "name" in parsed and "arguments" in parsed:
+                    args_raw = parsed["arguments"]
+                    args = args_raw if isinstance(args_raw, dict) else {}
+                    tool_calls.append(
+                        _build_tool_call(parsed["name"], args)
+                    )
+                    return tool_calls
+                if "toolInvocation" in parsed and "functionCall" in parsed:
+                    fc = parsed["functionCall"]
+                    if isinstance(fc, dict) and "name" in fc:
+                        params = fc.get("parameters") or fc.get("arguments") or {}
+                        params = params if isinstance(params, dict) else {}
+                        tool_calls.append(
+                            _build_tool_call(fc["name"], params)
+                        )
+                        return tool_calls
+        except Exception:
+            pass
+
+    for tool_name in ["web_search", "read_file", "write_file", "list_directory", "run_command"]:
         if tool_name in content:
             m = re.search(fr"{tool_name}\s*\(([\s\S]*?)\)", content)
             if m:
                 args_str = m.group(1).strip()
-                val_m = re.search(r"['\"](.*?)['\"]", args_str)
-                arg_val = val_m.group(1) if val_m else ""
 
-                key_map = {"web_search": "query", "run_command": "command"}
-                arg_key = key_map.get(tool_name, "path")
+                if args_str.startswith("{"):
+                    try:
+                        args_dict = json.loads(args_str)
+                    except Exception:
+                        args_dict = {}
+                    if not isinstance(args_dict, dict):
+                        args_dict = {}
+                else:
+                    val_m = re.search(r"['\"](.*?)['\"]", args_str)
+                    arg_val = val_m.group(1).strip() if val_m else ""
+                    key_map = {"web_search": "query", "run_command": "command"}
+                    arg_key = key_map.get(tool_name, "path")
+                    args_dict = {arg_key: arg_val}
 
-                tool_calls.append({
-                    "id": f"call_{os.urandom(4).hex()}",
-                    "type": "function",
-                    "function": {
-                        "name": tool_name,
-                        "arguments": json.dumps({arg_key: arg_val})
-                    }
-                })
+                tool_calls.append(
+                    _build_tool_call(tool_name, args_dict)
+                )
 
     return tool_calls
 
@@ -280,6 +344,7 @@ def _process_tool_calls(
             {
                 "role": "tool",
                 "name": name,
+                "tool_call_id": call.get("id", ""),
                 "content": format_tool_result(name, tool_output),
             }
         )
@@ -308,7 +373,6 @@ def _call_model(
             temperature=0.0,
             max_tokens=1024,
             stream=True,
-            stream_options={"include_usage": True},
         )
 
         content_buffer = ""
@@ -338,7 +402,7 @@ def _call_model(
                     if display_text == content_buffer:
                         panel_content = Markdown(display_text + "\u258c")
                     else:
-                        panel_content = display_text
+                        panel_content = display_text + " \u258c"
 
                     live.update(
                         Panel(
@@ -504,6 +568,8 @@ def run_agent_loop(
         messages.append({"role": "user", "content": stripped})
 
         answer = _call_model(client, model_name, messages)
+        if answer:
+            messages.append({"role": "assistant", "content": answer})
 
 
 def main() -> None:

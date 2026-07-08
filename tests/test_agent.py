@@ -99,8 +99,10 @@ class TestRobustToolParse:
         }
         result = robust_tool_parse(msg)
         assert len(result) == 1
-        assert result[0]["id"] == "fallback"
+        assert result[0]["id"].startswith("call_")
         assert result[0]["function"]["name"] == "web_search"
+        args = json.loads(result[0]["function"]["arguments"])
+        assert args == {"query": "hello"}
 
     def test_no_json_returns_empty_list(self) -> None:
         msg: Dict[str, Any] = {"content": "Just a plain text reply."}
@@ -121,7 +123,7 @@ class TestRobustToolParse:
         }
         result = robust_tool_parse(msg)
         assert len(result) == 1
-        assert result[0]["id"] == "fallback"
+        assert result[0]["id"].startswith("call_")
         assert result[0]["function"]["name"] == "web_search"
         args = json.loads(result[0]["function"]["arguments"])
         assert args == {"query": "current president of India"}
@@ -132,7 +134,7 @@ class TestRobustToolParse:
         }
         result = robust_tool_parse(msg)
         assert len(result) == 1
-        assert result[0]["id"] == "fallback"
+        assert result[0]["id"].startswith("call_")
         assert result[0]["function"]["name"] == "web_search"
         args = json.loads(result[0]["function"]["arguments"])
         assert args == {"query": "owner of this model"}
@@ -171,12 +173,12 @@ class TestRobustToolParse:
 class TestFormatToolResult:
     def test_returns_json_string(self) -> None:
         result = format_tool_result("read_file", "file content")
-        parsed = json.loads(result)
+        parsed = json.loads(result.split("\n\n", 1)[1])
         assert parsed == {"tool_name": "read_file", "result": "file content"}
 
     def test_handles_dict_result(self) -> None:
         result = format_tool_result("web_search", {"count": 5})
-        parsed = json.loads(result)
+        parsed = json.loads(result.split("\n\n", 1)[1])
         assert parsed["tool_name"] == "web_search"
         assert parsed["result"]["count"] == 5
 
