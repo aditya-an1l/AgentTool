@@ -115,6 +115,58 @@ class TestRobustToolParse:
         }
         assert robust_tool_parse(msg) == []
 
+    def test_fallback_func_name_parens(self) -> None:
+        msg: Dict[str, Any] = {
+            "content": 'web_search({"query": "current president of India"})'
+        }
+        result = robust_tool_parse(msg)
+        assert len(result) == 1
+        assert result[0]["id"] == "fallback"
+        assert result[0]["function"]["name"] == "web_search"
+        args = json.loads(result[0]["function"]["arguments"])
+        assert args == {"query": "current president of India"}
+
+    def test_fallback_tool_invocation(self) -> None:
+        msg: Dict[str, Any] = {
+            "content": '{"toolInvocation": "web_search", "functionCall": {"name": "web_search", "parameters": {"query": "owner of this model"}}}'
+        }
+        result = robust_tool_parse(msg)
+        assert len(result) == 1
+        assert result[0]["id"] == "fallback"
+        assert result[0]["function"]["name"] == "web_search"
+        args = json.loads(result[0]["function"]["arguments"])
+        assert args == {"query": "owner of this model"}
+
+    def test_fallback_tool_invocation_list_wrapped(self) -> None:
+        msg: Dict[str, Any] = {
+            "content": '[{"toolInvocation": "web_search", "functionCall": {"name": "web_search", "parameters": {"query": "test"}}}]'
+        }
+        result = robust_tool_parse(msg)
+        assert len(result) == 1
+        assert result[0]["function"]["name"] == "web_search"
+        args = json.loads(result[0]["function"]["arguments"])
+        assert args == {"query": "test"}
+
+    def test_fallback_code_style_colon(self) -> None:
+        msg: Dict[str, Any] = {
+            "content": 'web_search(query: "who is the president of France")'
+        }
+        result = robust_tool_parse(msg)
+        assert len(result) == 1
+        assert result[0]["function"]["name"] == "web_search"
+        args = json.loads(result[0]["function"]["arguments"])
+        assert args == {"query": "who is the president of France"}
+
+    def test_fallback_code_style_equals(self) -> None:
+        msg: Dict[str, Any] = {
+            "content": 'read_file(path="test.txt")'
+        }
+        result = robust_tool_parse(msg)
+        assert len(result) == 1
+        assert result[0]["function"]["name"] == "read_file"
+        args = json.loads(result[0]["function"]["arguments"])
+        assert args == {"path": "test.txt"}
+
 
 class TestFormatToolResult:
     def test_returns_json_string(self) -> None:

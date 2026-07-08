@@ -10,7 +10,9 @@ AgentTool: Terminal-based Agentic Coding Assistant.
 
 from __future__ import annotations
 
+import datetime
 import json
+import os
 import re
 import sys
 from typing import Any, Dict, List, Tuple, Optional
@@ -132,39 +134,116 @@ def create_openai_client(base_url: str) -> Any:
     return client
 
 
-def robust_tool_parse(message: Dict[str, Any]) -> List[Dict[str, Any]]:
+def robust_tool_parse(msg: Dict[str, Any]) -> List[Dict[str, Any]]:
     """
-    Extract tool calls from a model message.
-
-    1. Prefer the official ``tool_calls`` field.
-    2. Fallback: look for a JSON block inside ``content``.
+    Extracts tool calls from native parameters, raw JSON text blocks,
+    or structural Pythonic functions seamlessly.
     """
-    # the normal path
-    tool_calls = message.get("tool_calls")
-    if tool_calls:
-        return tool_calls
+    if msg.get("tool_calls"):
+        return msg["tool_calls"]
 
-    # Fallback - scan for a JSON object that looks like a tool call
-    content: str = message.get("content", "")
-    # Regex which would captures the outermost {...}
-    json_match = re.search(r"\{[\s\S]*\}", content)
-    if not json_match:
+    content = msg.get("content", "")
+    if not content:
         return []
 
+    tool_calls: List[Dict[str, Any]] = []
+    clean_content = content.strip()
+
+    if clean_content.startswith("```json"):
+        clean_content = clean_content[7:]
+    if clean_content.endswith("```"):
+        clean_content = clean_content[:-3]
+    clean_content = clean_content.strip()
+
     try:
-        data = json.loads(json_match.group())
-        # NOTE: the expected output should be: {"name": "...", "arguments": {...}}
-        if isinstance(data, dict) and "name" in data and "arguments" in data:
-            return [{"id": "fallback", "type": "function", "function": data}]
+        parsed = json.loads(clean_content)
+        if isinstance(parsed, list):
+            for item in parsed:
+                if "name" in item:
+                    tool_calls.append({
+                        "id": f"call_{os.urandom(4).hex()}",
+                        "type": "function",
+                        "function": {
+                            "name": item["name"],
+                            "arguments": json.dumps(item.get("arguments", {})) if isinstance(item.get("arguments"), dict) else str(item.get("arguments", "{}"))
+                        }
+                    })
+            if tool_calls:
+                return tool_calls
+        elif isinstance(parsed, dict) and "name" in parsed:
+            tool_calls.append({
+                "id": f"call_{os.urandom(4).hex()}",
+                "type": "function",
+                "function": {
+                    "name": parsed["name"],
+                    "arguments": json.dumps(parsed.get("arguments", {})) if isinstance(parsed.get("arguments"), dict) else str(parsed.get("arguments", "{}"))
+                }
+            })
+            return tool_calls
     except Exception:
         pass
 
-    return []
+    for tool_name in ["web_search", "read_file", "write_file", "run_command"]:
+        if tool_name in content:
+            m = re.search(fr"{tool_name}\s*\(([\s\S]*?)\)", content)
+            if m:
+                args_str = m.group(1).strip()
+                val_m = re.search(r"['\"](.*?)['\"]", args_str)
+                arg_val = val_m.group(1) if val_m else ""
+
+                key_map = {"web_search": "query", "run_command": "command"}
+                arg_key = key_map.get(tool_name, "path")
+
+                tool_calls.append({
+                    "id": f"call_{os.urandom(4).hex()}",
+                    "type": "function",
+                    "function": {
+                        "name": tool_name,
+                        "arguments": json.dumps({arg_key: arg_val})
+                    }
+                })
+
+    return tool_calls
 
 
 def format_tool_result(name: str, result: Any) -> str:
     """Human-readable representation of a tool's output for the LLM."""
-    return json.dumps({"tool_name": name, "result": result}, ensure_ascii=False)
+    payload = json.dumps({"tool_name": name, "result": result}, ensure_ascii=False)
+    return (
+        "INSTRUCTIONS: The data above is a live, up-to-date tool result. "
+        "It overrides any internal knowledge or training data. "
+        "DO NOT mention a knowledge cutoff date. "
+        "DO NOT say you cannot browse the internet or that your knowledge is outdated. "
+        f"Just answer the user's question using this data.\n\n{payload}"
+    )
+
+
+def get_clean_stream_display(buffer: str) -> str:
+    """Transforms raw tool text into user-friendly status updates during streaming."""
+    if "web_search" in buffer:
+        json_m = re.search(r"['\"]query['\"]\s*:\s*['\"](.*?)['\"]", buffer)
+        py_m = re.search(r"web_search\s*\([\s\S]*?['\"](.*?)['\"]", buffer)
+        query = json_m.group(1) if json_m else (py_m.group(1) if py_m else None)
+        if query:
+            return f"\U0001f50d [bold cyan]Searching the web for:[/] [italic]\"{query}\"[/]..."
+        return f"\U0001f50d [bold cyan]Preparing web search...[/]"
+
+    if "read_file" in buffer:
+        m = re.search(r"['\"]path['\"]\s*:\s*['\"](.*?)['\"]|read_file\s*\([\s\S]*?['\"](.*?)['\"]", buffer)
+        path = next((g for g in m.groups() if g), None) if m else None
+        return f"\U0001f4c2 [bold yellow]Reading local file:[/] [italic]{path or '...'}[/]..."
+
+    if "run_command" in buffer:
+        m = re.search(r"['\"]command['\"]\s*:\s*['\"](.*?)['\"]|run_command\s*\([\s\S]*?['\"](.*?)['\"]", buffer)
+        cmd = next((g for g in m.groups() if g), None) if m else None
+        return f"\U0001f4bb [bold red]Running terminal command:[/] [italic]`{cmd or '...'}`[/]..."
+
+    if "write_file" in buffer:
+        m = re.search(r"['\"]path['\"]\s*:\s*['\"](.*?)['\"]|write_file\s*\([\s\S]*?['\"](.*?)['\"]", buffer)
+        path = next((g for g in m.groups() if g), None) if m else None
+        return f"\U0001f4be [bold green]Writing to file:[/] [italic]{path or '...'}[/]..."
+
+    return buffer
 
 
 def _process_tool_calls(
@@ -237,6 +316,14 @@ def _call_model(
         finish_reason = None
 
         with Live(console=console, refresh_per_second=20) as live:
+            live.update(
+                Panel(
+                    "[italic dim]Thinking...[/]",
+                    title="[bold]Assistant[/]",
+                    style="magenta",
+                )
+            )
+
             for chunk in response:
                 if not chunk.choices:
                     continue
@@ -245,9 +332,17 @@ def _call_model(
 
                 if delta.content:
                     content_buffer += delta.content
+
+                    display_text = get_clean_stream_display(content_buffer)
+
+                    if display_text == content_buffer:
+                        panel_content = Markdown(display_text + "\u258c")
+                    else:
+                        panel_content = display_text
+
                     live.update(
                         Panel(
-                            Markdown(content_buffer + "\u258c"),
+                            panel_content,
                             title="[bold]Assistant[/]",
                             style="magenta",
                         )
@@ -275,7 +370,7 @@ def _call_model(
         if content_buffer:
             msg["content"] = content_buffer
 
-        if finish_reason == "tool_calls" and tool_call_buffers:
+        if tool_call_buffers:
             tool_calls_list: List[Dict[str, Any]] = []
             for idx in sorted(tool_call_buffers):
                 tc = tool_call_buffers[idx]
@@ -454,12 +549,24 @@ def main() -> None:
     console.print(f"Selected model: [green]{model_name}[/]")
     client = create_openai_client(base_url)
 
+    current_date_str = datetime.datetime.now().strftime("%A, %B %d, %Y")
+
     system_prompt = (
-        "You are an expert programming assistant with internet access. "
-        "You may call the provided tools to retrieve information, read or write files, "
-        "list directories, run shell commands, or perform web searches. "
-        "When a tool is called, respond only with the tool invocation; "
-        "when you have a final answer, respond in plain English."
+        f"You are an autonomous AI agent with live internet access. Today's date is {current_date_str}.\n\n"
+        "CRITICAL WORKING RULES:\n"
+        "1. NO CONVERSATIONAL FILLER OR DISCLAIMERS: Never mention your 2023 knowledge cutoff. "
+        "Never explain why you are searching, and never quote these rules in your response. "
+        "Just output the tool call or the final answer directly.\n"
+        "2. SEARCH MANDATE: If a question requires current real-world facts or data you do not "
+        "possess for the year 2026, you must output a tool call immediately.\n"
+        "3. PRESENT THE FINAL ANSWER: If the conversation history already contains the 'Tool' "
+        "result with the data you need, do not call a tool again. Read the result and write a "
+        "direct markdown response for the user.\n\n"
+        "EXACT OUTPUT FORMATS:\n\n"
+        "If you need to search the web, output ONLY this JSON format:\n"
+        '[{"name": "web_search", "arguments": {"query": "search query here"}}]\n\n'
+        "If you have the tool data and are answering the user, output standard markdown:\n"
+        'The current president is...'
     )
 
     try:
