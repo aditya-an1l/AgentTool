@@ -305,10 +305,9 @@ def _call_model(
                                 tc.function.arguments
                             )
 
-        msg: Dict[str, Any] = {
-            "role": "assistant",
-            "content": content_buffer or None,
-        }
+        msg: Dict[str, Any] = {"role": "assistant"}
+        if content_buffer:
+            msg["content"] = content_buffer
 
         if finish_reason == "tool_calls" and tool_call_buffers:
             tool_calls_list: List[Dict[str, Any]] = []
