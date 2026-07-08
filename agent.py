@@ -10,7 +10,9 @@ AgentTool: Terminal-based Agentic Coding Assistant.
 
 from __future__ import annotations
 
+import datetime
 import json
+import os
 import re
 import sys
 from typing import Any, Dict, List, Tuple, Optional
@@ -19,6 +21,7 @@ import requests
 from rich import box
 from rich.align import Align
 from rich.console import Console
+from rich.live import Live
 from rich.markdown import Markdown
 from rich.panel import Panel
 from rich.prompt import Prompt
@@ -131,73 +134,180 @@ def create_openai_client(base_url: str) -> Any:
     return client
 
 
-def robust_tool_parse(message: Dict[str, Any]) -> List[Dict[str, Any]]:
-    """
-    Extract tool calls from a model message.
+def _json_subtree(text: str) -> str | None:
+    """Extract the first complete JSON object or array embedded in text."""
+    for opener, closer in [("{", "}"), ("[", "]")]:
+        start = text.find(opener)
+        if start == -1:
+            continue
+        depth = 0
+        for i in range(start, len(text)):
+            if text[i] == opener:
+                depth += 1
+            elif text[i] == closer:
+                depth -= 1
+                if depth == 0:
+                    candidate = text[start : i + 1]
+                    try:
+                        json.loads(candidate)
+                        return candidate
+                    except Exception:
+                        break
+    return None
 
-    1. Prefer the official ``tool_calls`` field.
-    2. Fallback: look for a JSON block inside ``content``.
-    """
-    # the normal path
-    tool_calls = message.get("tool_calls")
-    if tool_calls:
-        return tool_calls
 
-    # Fallback - scan for a JSON object that looks like a tool call
-    content: str = message.get("content", "")
-    # Regex which would captures the outermost {...}
-    json_match = re.search(r"\{[\s\S]*\}", content)
-    if not json_match:
+def _build_tool_call(namespace: str, args: Dict[str, Any]) -> Dict[str, Any]:
+    """Build a standardised tool call dict with a unique ID."""
+    return {
+        "id": f"call_{os.urandom(4).hex()}",
+        "type": "function",
+        "function": {
+            "name": namespace,
+            "arguments": json.dumps(args),
+        },
+    }
+
+
+def robust_tool_parse(msg: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """
+    Extracts tool calls from native parameters, raw JSON text blocks,
+    or structural Pythonic functions seamlessly.
+    """
+    if msg.get("tool_calls"):
+        return msg["tool_calls"]
+
+    content = msg.get("content", "")
+    if not content:
         return []
 
-    try:
-        data = json.loads(json_match.group())
-        # NOTE: the expected output should be: {"name": "...", "arguments": {...}}
-        if isinstance(data, dict) and "name" in data and "arguments" in data:
-            return [{"id": "fallback", "type": "function", "function": data}]
-    except Exception:
-        pass
+    if content.startswith("INSTRUCTIONS:"):
+        return []
 
-    return []
+    tool_calls: List[Dict[str, Any]] = []
+    clean_content = content.strip()
+
+    if clean_content.startswith("```json"):
+        clean_content = clean_content[7:]
+    if clean_content.endswith("```"):
+        clean_content = clean_content[:-3]
+    clean_content = clean_content.strip()
+
+    json_str = clean_content
+    try:
+        json.loads(json_str)
+    except Exception:
+        extracted = _json_subtree(clean_content)
+        if extracted is not None:
+            json_str = extracted
+        else:
+            json_str = ""
+
+    if json_str:
+        try:
+            parsed = json.loads(json_str)
+            if isinstance(parsed, list):
+                for item in parsed:
+                    if "name" in item:
+                        args_raw = item.get("arguments", {})
+                        args = args_raw if isinstance(args_raw, dict) else {}
+                        tool_calls.append(
+                            _build_tool_call(item["name"], args)
+                        )
+                    elif "functionCall" in item and isinstance(item["functionCall"], dict):
+                        fc = item["functionCall"]
+                        if "name" in fc:
+                            params = fc.get("parameters") or fc.get("arguments") or {}
+                            params = params if isinstance(params, dict) else {}
+                            tool_calls.append(
+                                _build_tool_call(fc["name"], params)
+                            )
+                if tool_calls:
+                    return tool_calls
+            elif isinstance(parsed, dict):
+                if "name" in parsed and "arguments" in parsed:
+                    args_raw = parsed["arguments"]
+                    args = args_raw if isinstance(args_raw, dict) else {}
+                    tool_calls.append(
+                        _build_tool_call(parsed["name"], args)
+                    )
+                    return tool_calls
+                if "toolInvocation" in parsed and "functionCall" in parsed:
+                    fc = parsed["functionCall"]
+                    if isinstance(fc, dict) and "name" in fc:
+                        params = fc.get("parameters") or fc.get("arguments") or {}
+                        params = params if isinstance(params, dict) else {}
+                        tool_calls.append(
+                            _build_tool_call(fc["name"], params)
+                        )
+                        return tool_calls
+        except Exception:
+            pass
+
+    for tool_name in ["web_search", "read_file", "write_file", "list_directory", "run_command"]:
+        if tool_name in content:
+            m = re.search(fr"{tool_name}\s*\(([\s\S]*?)\)", content)
+            if m:
+                args_str = m.group(1).strip()
+
+                if args_str.startswith("{"):
+                    try:
+                        args_dict = json.loads(args_str)
+                    except Exception:
+                        args_dict = {}
+                    if not isinstance(args_dict, dict):
+                        args_dict = {}
+                else:
+                    val_m = re.search(r"['\"](.*?)['\"]", args_str)
+                    arg_val = val_m.group(1).strip() if val_m else ""
+                    key_map = {"web_search": "query", "run_command": "command"}
+                    arg_key = key_map.get(tool_name, "path")
+                    args_dict = {arg_key: arg_val}
+
+                tool_calls.append(
+                    _build_tool_call(tool_name, args_dict)
+                )
+
+    return tool_calls
 
 
 def format_tool_result(name: str, result: Any) -> str:
     """Human-readable representation of a tool's output for the LLM."""
-    return json.dumps({"tool_name": name, "result": result}, ensure_ascii=False)
-
-
-def _convert_response(raw_msg: Any) -> Dict[str, Any]:
-    """
-    Convert an OpenAI v1+ Pydantic ChatCompletionMessage object into a
-    plain dict so we can pass it to ``robust_tool_parse`` and append it
-    to the message history.
-    """
-    msg: Dict[str, Any] = {
-        "role": raw_msg.role if hasattr(raw_msg, "role") else "assistant",
-        "content": raw_msg.content if hasattr(raw_msg, "content") else None,
-    }
-
-    raw_calls = (
-        raw_msg.tool_calls
-        if hasattr(raw_msg, "tool_calls") and raw_msg.tool_calls
-        else []
+    payload = json.dumps({"tool_name": name, "result": result}, ensure_ascii=False)
+    return (
+        "INSTRUCTIONS: The data above is a live, up-to-date tool result. "
+        "It overrides any internal knowledge or training data. "
+        "DO NOT mention a knowledge cutoff date. "
+        "DO NOT say you cannot browse the internet or that your knowledge is outdated. "
+        f"Just answer the user's question using this data.\n\n{payload}"
     )
-    tool_calls_list: List[Dict[str, Any]] = []
-    for tc in raw_calls:
-        tool_calls_list.append(
-            {
-                "id": tc.id,
-                "type": "function",
-                "function": {
-                    "name": tc.function.name,
-                    "arguments": tc.function.arguments,
-                },
-            }
-        )
-    if tool_calls_list:
-        msg["tool_calls"] = tool_calls_list
 
-    return msg
+
+def get_clean_stream_display(buffer: str) -> str:
+    """Transforms raw tool text into user-friendly status updates during streaming."""
+    if "web_search" in buffer:
+        json_m = re.search(r"['\"]query['\"]\s*:\s*['\"](.*?)['\"]", buffer)
+        py_m = re.search(r"web_search\s*\([\s\S]*?['\"](.*?)['\"]", buffer)
+        query = json_m.group(1) if json_m else (py_m.group(1) if py_m else None)
+        if query:
+            return f"\U0001f50d [bold cyan]Searching the web for:[/] [italic]\"{query}\"[/]..."
+        return f"\U0001f50d [bold cyan]Preparing web search...[/]"
+
+    if "read_file" in buffer:
+        m = re.search(r"['\"]path['\"]\s*:\s*['\"](.*?)['\"]|read_file\s*\([\s\S]*?['\"](.*?)['\"]", buffer)
+        path = next((g for g in m.groups() if g), None) if m else None
+        return f"\U0001f4c2 [bold yellow]Reading local file:[/] [italic]{path or '...'}[/]..."
+
+    if "run_command" in buffer:
+        m = re.search(r"['\"]command['\"]\s*:\s*['\"](.*?)['\"]|run_command\s*\([\s\S]*?['\"](.*?)['\"]", buffer)
+        cmd = next((g for g in m.groups() if g), None) if m else None
+        return f"\U0001f4bb [bold red]Running terminal command:[/] [italic]`{cmd or '...'}`[/]..."
+
+    if "write_file" in buffer:
+        m = re.search(r"['\"]path['\"]\s*:\s*['\"](.*?)['\"]|write_file\s*\([\s\S]*?['\"](.*?)['\"]", buffer)
+        path = next((g for g in m.groups() if g), None) if m else None
+        return f"\U0001f4be [bold green]Writing to file:[/] [italic]{path or '...'}[/]..."
+
+    return buffer
 
 
 def _process_tool_calls(
@@ -234,6 +344,7 @@ def _process_tool_calls(
             {
                 "role": "tool",
                 "name": name,
+                "tool_call_id": call.get("id", ""),
                 "content": format_tool_result(name, tool_output),
             }
         )
@@ -249,29 +360,112 @@ def _call_model(
     Send *messages* to the model and follow the tool-calling chain until
     a final textual answer arrives (or the iteration limit is hit).
 
+    Streams the response tokens in real-time via Rich's Live display.
+
     Returns the final text content, or ``None`` if the limit was reached.
     """
     for _iteration in range(max_iters):
-        with console.status("[bold green]Thinking...[/]"):
-            response = client.chat.completions.create(
-                model=model_name,
-                messages=messages,
-                tools=TOOL_DEFINITIONS,
-                tool_choice="auto",
-                temperature=0.0,
-                max_tokens=1024,
+        response = client.chat.completions.create(
+            model=model_name,
+            messages=messages,
+            tools=TOOL_DEFINITIONS,
+            tool_choice="auto",
+            temperature=0.0,
+            max_tokens=1024,
+            stream=True,
+        )
+
+        content_buffer = ""
+        tool_call_buffers: Dict[int, Dict[str, str]] = {}
+        finish_reason = None
+
+        with Live(console=console, refresh_per_second=20) as live:
+            live.update(
+                Panel(
+                    "[italic dim]Thinking...[/]",
+                    title="[bold]Assistant[/]",
+                    style="magenta",
+                )
             )
-        msg = _convert_response(response.choices[0].message)
-        messages.append(msg)
+
+            for chunk in response:
+                if not chunk.choices:
+                    continue
+                delta = chunk.choices[0].delta
+                finish_reason = chunk.choices[0].finish_reason
+
+                if delta.content:
+                    content_buffer += delta.content
+
+                    display_text = get_clean_stream_display(content_buffer)
+
+                    if display_text == content_buffer:
+                        panel_content = Markdown(display_text + "\u258c")
+                    else:
+                        panel_content = display_text + " \u258c"
+
+                    live.update(
+                        Panel(
+                            panel_content,
+                            title="[bold]Assistant[/]",
+                            style="magenta",
+                        )
+                    )
+
+                if delta.tool_calls:
+                    for tc in delta.tool_calls:
+                        idx = tc.index
+                        if idx not in tool_call_buffers:
+                            tool_call_buffers[idx] = {
+                                "id": "",
+                                "name": "",
+                                "arguments": "",
+                            }
+                        if tc.id:
+                            tool_call_buffers[idx]["id"] += tc.id
+                        if tc.function and tc.function.name:
+                            tool_call_buffers[idx]["name"] += tc.function.name
+                        if tc.function and tc.function.arguments:
+                            tool_call_buffers[idx]["arguments"] += (
+                                tc.function.arguments
+                            )
+
+        msg: Dict[str, Any] = {"role": "assistant"}
+        if content_buffer:
+            msg["content"] = content_buffer
+
+        if tool_call_buffers:
+            tool_calls_list: List[Dict[str, Any]] = []
+            for idx in sorted(tool_call_buffers):
+                tc = tool_call_buffers[idx]
+                tool_calls_list.append(
+                    {
+                        "id": tc["id"] if tc["id"] else f"call_{os.urandom(4).hex()}",
+                        "type": "function",
+                        "function": {
+                            "name": tc["name"],
+                            "arguments": tc["arguments"],
+                        },
+                    }
+                )
+            msg["tool_calls"] = tool_calls_list
 
         calls = robust_tool_parse(msg)
+        if calls:
+            msg["tool_calls"] = calls
+
+            if not tool_call_buffers:
+                msg["content"] = None
+
+        messages.append(msg)
+
         if calls:
             _process_tool_calls(calls, messages)
             continue
 
         return msg.get("content")
 
-    console.print("[yellow]Reached iteration limit — stopping tool chain.[/]")
+    console.print("[yellow]Reached iteration limit - stopping tool chain.[/]")
     return None
 
 
@@ -375,8 +569,7 @@ def run_agent_loop(
 
         answer = _call_model(client, model_name, messages)
         if answer:
-            console.print(Panel("[bold]Assistant[/]", style="magenta"))
-            console.print(Markdown(answer))
+            messages.append({"role": "assistant", "content": answer})
 
 
 def main() -> None:
@@ -428,12 +621,24 @@ def main() -> None:
     console.print(f"Selected model: [green]{model_name}[/]")
     client = create_openai_client(base_url)
 
+    current_date_str = datetime.datetime.now().strftime("%A, %B %d, %Y")
+
     system_prompt = (
-        "You are an expert programming assistant with internet access. "
-        "You may call the provided tools to retrieve information, read or write files, "
-        "list directories, run shell commands, or perform web searches. "
-        "When a tool is called, respond only with the tool invocation; "
-        "when you have a final answer, respond in plain English."
+        f"You are an autonomous AI agent with live internet access. Today's date is {current_date_str}.\n\n"
+        "CRITICAL WORKING RULES:\n"
+        "1. NO CONVERSATIONAL FILLER OR DISCLAIMERS: Never mention your 2023 knowledge cutoff. "
+        "Never explain why you are searching, and never quote these rules in your response. "
+        "Just output the tool call or the final answer directly.\n"
+        "2. SEARCH MANDATE: If a question requires current real-world facts or data you do not "
+        "possess for the year 2026, you must output a tool call immediately.\n"
+        "3. PRESENT THE FINAL ANSWER: If the conversation history already contains the 'Tool' "
+        "result with the data you need, do not call a tool again. Read the result and write a "
+        "direct markdown response for the user.\n\n"
+        "EXACT OUTPUT FORMATS:\n\n"
+        "If you need to search the web, output ONLY this JSON format:\n"
+        '[{"name": "web_search", "arguments": {"query": "search query here"}}]\n\n'
+        "If you have the tool data and are answering the user, output standard markdown:\n"
+        'The current president is...'
     )
 
     try:

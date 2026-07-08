@@ -158,8 +158,19 @@ def list_directory(path: str) -> str:
         return f"Error listing {p}: {exc}"
 
 
+_DANGEROUS_PATTERNS = [
+    "rm -rf", "rm -fr", "rm -r /",
+    ">", ">>", "dd if=", ":(){ :|:& };:",
+    "mkfs.", "fdisk", "dd if=",
+]
+
+
 def run_command(command: str) -> str:
     """Execute a command with a 30-second timeout."""
+    cmd_lower = command.lower()
+    for pattern in _DANGEROUS_PATTERNS:
+        if pattern.lower() in cmd_lower:
+            return f"Error: Command blocked — contains dangerous pattern '{pattern}'."
     try:
         completed = subprocess.run(
             command,
