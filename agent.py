@@ -19,6 +19,7 @@ import requests
 from rich import box
 from rich.align import Align
 from rich.console import Console
+from rich.live import Live
 from rich.markdown import Markdown
 from rich.panel import Panel
 from rich.prompt import Prompt
@@ -249,19 +250,82 @@ def _call_model(
     Send *messages* to the model and follow the tool-calling chain until
     a final textual answer arrives (or the iteration limit is hit).
 
+    Streams the response tokens in real-time via Rich's Live display.
+
     Returns the final text content, or ``None`` if the limit was reached.
     """
     for _iteration in range(max_iters):
-        with console.status("[bold green]Thinking...[/]"):
-            response = client.chat.completions.create(
-                model=model_name,
-                messages=messages,
-                tools=TOOL_DEFINITIONS,
-                tool_choice="auto",
-                temperature=0.0,
-                max_tokens=1024,
-            )
-        msg = _convert_response(response.choices[0].message)
+        response = client.chat.completions.create(
+            model=model_name,
+            messages=messages,
+            tools=TOOL_DEFINITIONS,
+            tool_choice="auto",
+            temperature=0.0,
+            max_tokens=1024,
+            stream=True,
+            stream_options={"include_usage": True},
+        )
+
+        content_buffer = ""
+        tool_call_buffers: Dict[int, Dict[str, str]] = {}
+        finish_reason = None
+
+        with Live(console=console, refresh_per_second=20) as live:
+            for chunk in response:
+                if not chunk.choices:
+                    continue
+                delta = chunk.choices[0].delta
+                finish_reason = chunk.choices[0].finish_reason
+
+                if delta.content:
+                    content_buffer += delta.content
+                    live.update(
+                        Panel(
+                            Markdown(content_buffer + "\u258c"),
+                            title="[bold]Assistant[/]",
+                            style="magenta",
+                        )
+                    )
+
+                if delta.tool_calls:
+                    for tc in delta.tool_calls:
+                        idx = tc.index
+                        if idx not in tool_call_buffers:
+                            tool_call_buffers[idx] = {
+                                "id": "",
+                                "name": "",
+                                "arguments": "",
+                            }
+                        if tc.id:
+                            tool_call_buffers[idx]["id"] += tc.id
+                        if tc.function and tc.function.name:
+                            tool_call_buffers[idx]["name"] += tc.function.name
+                        if tc.function and tc.function.arguments:
+                            tool_call_buffers[idx]["arguments"] += (
+                                tc.function.arguments
+                            )
+
+        msg: Dict[str, Any] = {
+            "role": "assistant",
+            "content": content_buffer or None,
+        }
+
+        if finish_reason == "tool_calls" and tool_call_buffers:
+            tool_calls_list: List[Dict[str, Any]] = []
+            for idx in sorted(tool_call_buffers):
+                tc = tool_call_buffers[idx]
+                tool_calls_list.append(
+                    {
+                        "id": tc["id"],
+                        "type": "function",
+                        "function": {
+                            "name": tc["name"],
+                            "arguments": tc["arguments"],
+                        },
+                    }
+                )
+            msg["tool_calls"] = tool_calls_list
+
         messages.append(msg)
 
         calls = robust_tool_parse(msg)
@@ -271,7 +335,7 @@ def _call_model(
 
         return msg.get("content")
 
-    console.print("[yellow]Reached iteration limit — stopping tool chain.[/]")
+    console.print("[yellow]Reached iteration limit - stopping tool chain.[/]")
     return None
 
 
@@ -374,9 +438,6 @@ def run_agent_loop(
         messages.append({"role": "user", "content": stripped})
 
         answer = _call_model(client, model_name, messages)
-        if answer:
-            console.print(Panel("[bold]Assistant[/]", style="magenta"))
-            console.print(Markdown(answer))
 
 
 def main() -> None:
