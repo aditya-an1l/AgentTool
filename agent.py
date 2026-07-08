@@ -376,7 +376,7 @@ def _call_model(
                 tc = tool_call_buffers[idx]
                 tool_calls_list.append(
                     {
-                        "id": tc["id"],
+                        "id": tc["id"] if tc["id"] else f"call_{os.urandom(4).hex()}",
                         "type": "function",
                         "function": {
                             "name": tc["name"],
@@ -386,9 +386,15 @@ def _call_model(
                 )
             msg["tool_calls"] = tool_calls_list
 
+        calls = robust_tool_parse(msg)
+        if calls:
+            msg["tool_calls"] = calls
+
+            if not tool_call_buffers:
+                msg["content"] = None
+
         messages.append(msg)
 
-        calls = robust_tool_parse(msg)
         if calls:
             _process_tool_calls(calls, messages)
             continue
