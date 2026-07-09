@@ -15,7 +15,7 @@ import json
 import os
 import re
 import sys
-from typing import Any, Dict, List, Tuple, Optional
+from typing import Any, Dict, List, Tuple
 
 import requests
 from rich import box
@@ -290,7 +290,7 @@ def get_clean_stream_display(buffer: str) -> str:
         query = json_m.group(1) if json_m else (py_m.group(1) if py_m else None)
         if query:
             return f"\U0001f50d [bold cyan]Searching the web for:[/] [italic]\"{query}\"[/]..."
-        return f"\U0001f50d [bold cyan]Preparing web search...[/]"
+        return "\U0001f50d [bold cyan]Preparing web search...[/]"
 
     if "read_file" in buffer:
         m = re.search(r"['\"]path['\"]\s*:\s*['\"](.*?)['\"]|read_file\s*\([\s\S]*?['\"](.*?)['\"]", buffer)
@@ -392,7 +392,6 @@ def _call_model(
                 if not chunk.choices:
                     continue
                 delta = chunk.choices[0].delta
-                finish_reason = chunk.choices[0].finish_reason
 
                 if delta.content:
                     content_buffer += delta.content
