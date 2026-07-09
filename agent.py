@@ -15,6 +15,7 @@ import json
 import os
 import re
 import sys
+from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
 import requests
@@ -40,6 +41,68 @@ from tools import (
 install_rich_traceback(show_locals=False)
 
 console = Console()
+
+SESSION_DIR = Path.home() / ".local" / "share" / "agenttool" / "sessions"
+MAX_LOAD_MESSAGES = 50
+
+
+def _session_file_path() -> Path:
+    stamp = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    SESSION_DIR.mkdir(parents=True, exist_ok=True)
+    return SESSION_DIR / f"{stamp}.jsonl"
+
+
+def _save_message(file_path: Path, msg: Dict[str, Any]) -> None:
+    with file_path.open("a") as f:
+        f.write(json.dumps(msg, ensure_ascii=False) + "\n")
+
+
+def _load_messages(file_path: Path) -> List[Dict[str, Any]]:
+    msgs: List[Dict[str, Any]] = []
+    try:
+        with file_path.open() as f:
+            for line in f:
+                line = line.strip()
+                if line:
+                    msgs.append(json.loads(line))
+    except (FileNotFoundError, json.JSONDecodeError, OSError):
+        pass
+    return msgs[-MAX_LOAD_MESSAGES:] if msgs else []
+
+
+def _list_sessions() -> List[Path]:
+    try:
+        files = sorted(SESSION_DIR.glob("*.jsonl"), reverse=True)
+    except OSError:
+        files = []
+    return files
+
+
+def _format_session_label(f: Path) -> str:
+    return f.stem.replace("_", " ").replace("-", ":")
+
+
+def _pick_session(sessions: List[Path]) -> Path | None:
+    if not sessions:
+        return None
+    if len(sessions) == 1:
+        return sessions[0]
+    choices = {str(i): f for i, f in enumerate(sessions, 1)}
+    table = Table(title="Existing sessions", box=box.SIMPLE)
+    table.add_column("#", style="cyan")
+    table.add_column("Session", style="green")
+    table.add_column("Size", style="dim")
+    for i, f in enumerate(sessions, 1):
+        size = f.stat().st_size if f.exists() else 0
+        table.add_row(str(i), _format_session_label(f), f"{size / 1024:.1f} KB")
+    console.print(table)
+    while True:
+        raw = input("Pick a session by number (or press Enter for none): ").strip()
+        if not raw:
+            return None
+        if raw in choices:
+            return choices[raw]
+        console.print("[red]Invalid choice.[/]")
 
 
 def _fetch_ollama_models() -> List[Tuple[str, str, str]]:
@@ -355,6 +418,7 @@ def _call_model(
     model_name: str,
     messages: List[Dict[str, Any]],
     max_iters: int = 10,
+    sess_file: Path | None = None,
 ) -> str | None:
     """
     Send *messages* to the model and follow the tool-calling chain until
@@ -459,7 +523,14 @@ def _call_model(
 
         if calls:
             _process_tool_calls(calls, messages)
+            if sess_file is not None:
+                _save_message(sess_file, msg)
+                for t_msg in messages[len(messages) - len(calls):]:
+                    if t_msg.get("role") == "tool":
+                        _save_message(sess_file, t_msg)
             continue
+        elif sess_file is not None:
+            _save_message(sess_file, msg)
 
         return msg.get("content")
 
@@ -471,6 +542,7 @@ def run_agent_loop(
     client: Any,
     model_name: str,
     system_prompt: str,
+    resume_session: Path | None = None,
 ) -> None:
     """
     Interactive chat loop.
@@ -478,6 +550,10 @@ def run_agent_loop(
     Prompts the user for input, sends it to the model, follows the
     tool-calling chain until a text answer arrives, and prints it.
     Loops until the user types *exit* / *quit* or presses Ctrl+C.
+
+    If *resume_session* is provided, conversation history is loaded
+    from that file (up to MAX_LOAD_MESSAGES messages) after the
+    system prompt. Every new message is appended to the session file.
 
     Input conventions:
       · Enter              submit the prompt
@@ -489,6 +565,20 @@ def run_agent_loop(
     messages: List[Dict[str, Any]] = [
         {"role": "system", "content": system_prompt},
     ]
+
+    sess_file = _session_file_path()
+    loaded_count = 0
+    if resume_session is not None:
+        history = _load_messages(resume_session)
+        messages.extend(history)
+        loaded_count = len(history)
+        console.print(
+            Panel(
+                f"[green]Resumed session [bold]{_format_session_label(resume_session)}[/] "
+                f"with [bold]{loaded_count}[/] messages.",
+                style="green",
+            )
+        )
 
     kb = KeyBindings()
 
@@ -564,10 +654,12 @@ def run_agent_loop(
             return
 
         messages.append({"role": "user", "content": stripped})
+        _save_message(sess_file, messages[-1])
 
-        answer = _call_model(client, model_name, messages)
+        answer = _call_model(client, model_name, messages, sess_file=sess_file)
         if answer:
             messages.append({"role": "assistant", "content": answer})
+            _save_message(sess_file, messages[-1])
 
 
 def main() -> None:
@@ -639,8 +731,11 @@ def main() -> None:
         'The current president is...'
     )
 
+    sessions = _list_sessions()
+    resume_session = _pick_session(sessions)
+
     try:
-        run_agent_loop(client, model_id, system_prompt)
+        run_agent_loop(client, model_id, system_prompt, resume_session)
     except KeyboardInterrupt:
         console.print("\n[bold red]Interrupted by user - exiting.[/]")
 
