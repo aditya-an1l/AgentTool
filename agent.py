@@ -377,7 +377,6 @@ def _call_model(
 
         content_buffer = ""
         tool_call_buffers: Dict[int, Dict[str, str]] = {}
-        finish_reason = None
 
         with Live(console=console, refresh_per_second=20) as live:
             live.update(
