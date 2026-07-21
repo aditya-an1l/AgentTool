@@ -1,0 +1,16 @@
+Source: agenttool
+Section: utils
+Priority: optional
+Maintainer: Aditya Anil <aditya.anil.productions@gmail.com>
+Build-Depends: debhelper-compat (= 13), dh-python, python3-all, python3-setuptools, python3-wheel
+Standards-Version: 4.6.0
+Homepage: https://github.com/aditya-an1l/AgentTool
+
+Package: agenttool
+Architecture: all
+Depends: ${python3:Depends}, ${misc:Depends}, python3 (>= 3.10), python3-openai, python3-ddgs, python3-rich, python3-prompt-toolkit, python3-requests
+Description: Terminal-based agentic coding assistant powered by local LLMs
+ AgentTool is a lightweight Python CLI that discovers locally-running LLM
+ servers (Ollama or LM Studio), lets you pick a model, and runs an
+ OpenAI-compatible agentic loop with tool-calling capabilities. It supports
+ web search, file I/O, directory listing, and shell command execution.

@@ -1,0 +1,8 @@
+agenttool (0.2.0-1) unstable; urgency=medium
+
+  * Initial release on Debian/Ubuntu.
+  * Terminal-based agentic coding assistant powered by local LLMs.
+  * Supports Ollama and LM Studio model discovery.
+  * Tool-calling loop with web search, file I/O, and shell execution.
+
+ -- Aditya Anil <aditya.anil.productions@gmail.com>  Tue, 21 Jul 2026 12:00:00 +0530
