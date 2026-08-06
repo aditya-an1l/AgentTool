@@ -2,7 +2,7 @@ Source: agenttool
 Section: utils
 Priority: optional
 Maintainer: Aditya Anil <aditya.anil.productions@gmail.com>
-Build-Depends: debhelper-compat (= 13), dh-python, python3-all, python3-setuptools, python3-wheel
+Build-Depends: debhelper-compat (= 13), dh-python, pybuild-plugin-pyproject, python3-all, python3-setuptools, python3-wheel
 Standards-Version: 4.6.0
 Homepage: https://github.com/aditya-an1l/AgentTool
 
