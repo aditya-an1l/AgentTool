@@ -9,7 +9,6 @@ BuildArch:      noarch
 BuildRequires:  python3-devel
 BuildRequires:  python3-setuptools
 Requires:       python3-openai
-Requires:       python3-ddgs
 Requires:       python3-rich
 Requires:       python3-prompt-toolkit
 Requires:       python3-requests
