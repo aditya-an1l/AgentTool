@@ -1,4 +1,4 @@
-agenttool (0.2.0-1) unstable; urgency=medium
+agenttool (0.2.0) unstable; urgency=medium
 
   * Initial release on Debian/Ubuntu.
   * Terminal-based agentic coding assistant powered by local LLMs.
