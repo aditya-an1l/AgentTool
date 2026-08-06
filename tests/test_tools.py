@@ -16,7 +16,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from tools import (
     TOOL_DEFINITIONS,
+    diff,
+    edit_file,
     execute_tool,
+    grep_search,
     list_directory,
     read_file,
     run_command,
@@ -39,6 +42,9 @@ class TestToolDefinitions:
             "read_file",
             "write_file",
             "list_directory",
+            "grep_search",
+            "diff",
+            "edit_file",
             "run_command",
         }
 
@@ -91,6 +97,94 @@ class TestListDirectory:
         assert result.startswith("Error: Not a directory -")
 
 
+class TestGrepSearch:
+    def test_finds_matching_lines_with_line_numbers(self, tmp_workspace: str) -> None:
+        target = Path(tmp_workspace, "sample.py")
+        target.write_text("def foo():\n    return 1\n# a comment\n", encoding="utf-8")
+        result = grep_search("return", str(target))
+        lines = result.split("\n")
+        assert len(lines) == 1
+        assert lines[0].endswith("sample.py:2:     return 1")
+
+    def test_searches_directory_recursively(self, tmp_workspace: str) -> None:
+        Path(tmp_workspace, "a.txt").write_text("hello world", encoding="utf-8")
+        os.makedirs(os.path.join(tmp_workspace, "sub"))
+        Path(tmp_workspace, "sub", "b.txt").write_text("hello again", encoding="utf-8")
+        result = grep_search("hello", tmp_workspace)
+        assert "a.txt:1:" in result
+        assert "b.txt:1:" in result
+
+    def test_returns_no_matches_message(self, tmp_workspace: str) -> None:
+        Path(tmp_workspace, "a.txt").write_text("nothing here", encoding="utf-8")
+        result = grep_search("zzz", tmp_workspace)
+        assert result == "No matches found."
+
+    def test_returns_error_for_invalid_regex(self, tmp_workspace: str) -> None:
+        result = grep_search("[", tmp_workspace)
+        assert result.startswith("Error: Invalid regex")
+
+    def test_returns_error_for_missing_path(self) -> None:
+        result = grep_search("x", "/tmp/nonexistent_dir_zzz999")
+        assert result.startswith("Error: Path not found -")
+
+
+class TestDiff:
+    def test_shows_unified_diff(self, tmp_workspace: str) -> None:
+        a = Path(tmp_workspace, "a.txt")
+        b = Path(tmp_workspace, "b.txt")
+        a.write_text("line one\nline two\n", encoding="utf-8")
+        b.write_text("line one\nline two changed\n", encoding="utf-8")
+        result = diff(str(a), str(b))
+        assert "-line two" in result
+        assert "+line two changed" in result
+
+    def test_identical_files(self, tmp_workspace: str) -> None:
+        a = Path(tmp_workspace, "a.txt")
+        b = Path(tmp_workspace, "b.txt")
+        a.write_text("same", encoding="utf-8")
+        b.write_text("same", encoding="utf-8")
+        result = diff(str(a), str(b))
+        assert result == "Files are identical."
+
+    def test_returns_error_for_missing_file(self, tmp_workspace: str) -> None:
+        b = Path(tmp_workspace, "b.txt")
+        b.write_text("x", encoding="utf-8")
+        result = diff("/tmp/nonexistent_file_99999", str(b))
+        assert result.startswith("Error reading")
+
+
+class TestEditFile:
+    def test_replaces_substring(self, tmp_workspace: str) -> None:
+        path = os.path.join(tmp_workspace, "edit.txt")
+        Path(path).write_text("foo bar baz", encoding="utf-8")
+        result = edit_file(path, "bar", "qux")
+        assert result == f"Successfully edited {path}"
+        assert Path(path).read_text(encoding="utf-8") == "foo qux baz"
+
+    def test_errors_when_old_string_missing(self, tmp_workspace: str) -> None:
+        path = os.path.join(tmp_workspace, "edit.txt")
+        Path(path).write_text("foo", encoding="utf-8")
+        result = edit_file(path, "missing", "x")
+        assert result.startswith("Error: old_string not found")
+
+    def test_errors_on_ambiguous_match(self, tmp_workspace: str) -> None:
+        path = os.path.join(tmp_workspace, "edit.txt")
+        Path(path).write_text("abc abc", encoding="utf-8")
+        result = edit_file(path, "abc", "x")
+        assert "occurrences" in result
+
+    def test_replace_all(self, tmp_workspace: str) -> None:
+        path = os.path.join(tmp_workspace, "edit.txt")
+        Path(path).write_text("abc abc", encoding="utf-8")
+        result = edit_file(path, "abc", "x", replace_all=True)
+        assert result == f"Successfully edited {path}"
+        assert Path(path).read_text(encoding="utf-8") == "x x"
+
+    def test_errors_for_missing_file(self) -> None:
+        result = edit_file("/tmp/nonexistent_file_77777", "a", "b")
+        assert result.startswith("Error: File not found -")
+
+
 class TestRunCommand:
     def test_echo_stdout(self) -> None:
         result = run_command("echo hello world")
@@ -123,6 +217,29 @@ class TestExecuteTool:
     def test_dispatches_list_directory(self) -> None:
         result = execute_tool("list_directory", {"path": os.path.dirname(__file__)})
         assert "test_tools.py" in result
+
+    def test_dispatches_grep_search(self, tmp_workspace: str) -> None:
+        path = os.path.join(tmp_workspace, "grep.txt")
+        Path(path).write_text("needle here", encoding="utf-8")
+        result = execute_tool("grep_search", {"pattern": "needle", "path": path})
+        assert "grep.txt:1:" in result
+
+    def test_dispatches_diff(self, tmp_workspace: str) -> None:
+        a = os.path.join(tmp_workspace, "a.txt")
+        b = os.path.join(tmp_workspace, "b.txt")
+        Path(a).write_text("same", encoding="utf-8")
+        Path(b).write_text("different", encoding="utf-8")
+        result = execute_tool("diff", {"path_a": a, "path_b": b})
+        assert "-same" in result
+        assert "+different" in result
+
+    def test_dispatches_edit_file(self, tmp_workspace: str) -> None:
+        path = os.path.join(tmp_workspace, "edit.txt")
+        Path(path).write_text("foo bar", encoding="utf-8")
+        result = execute_tool(
+            "edit_file", {"path": path, "old_string": "bar", "new_string": "baz"}
+        )
+        assert "Successfully edited" in result
 
     def test_dispatches_run_command(self) -> None:
         result = execute_tool("run_command", {"command": "echo dispatch"})

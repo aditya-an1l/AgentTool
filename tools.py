@@ -8,6 +8,8 @@ signature required by the specification.
 
 from __future__ import annotations
 
+import difflib
+import re
 import subprocess
 from pathlib import Path
 from typing import Any, Dict, List
@@ -90,6 +92,81 @@ TOOL_DEFINITIONS: List[Dict[str, Any]] = [
     {
         "type": "function",
         "function": {
+            "name": "grep_search",
+            "description": "Search files for a regex pattern, returning matching lines with line numbers.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "pattern": {
+                        "type": "string",
+                        "description": "Regular expression to search for.",
+                    },
+                    "path": {
+                        "type": "string",
+                        "description": "File or directory to search (defaults to current directory).",
+                    },
+                    "include": {
+                        "type": "string",
+                        "description": "Glob pattern filtering which files to search in a directory.",
+                    },
+                },
+                "required": ["pattern"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "diff",
+            "description": "Show a unified diff between two files.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "path_a": {
+                        "type": "string",
+                        "description": "First (original) file path.",
+                    },
+                    "path_b": {
+                        "type": "string",
+                        "description": "Second (changed) file path.",
+                    },
+                },
+                "required": ["path_a", "path_b"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "edit_file",
+            "description": "Replace an exact substring in a file. Pass replace_all to change every occurrence.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "path": {
+                        "type": "string",
+                        "description": "Target file path.",
+                    },
+                    "old_string": {
+                        "type": "string",
+                        "description": "Exact text to replace.",
+                    },
+                    "new_string": {
+                        "type": "string",
+                        "description": "Replacement text.",
+                    },
+                    "replace_all": {
+                        "type": "boolean",
+                        "description": "Replace every occurrence instead of failing on ambiguity.",
+                    },
+                },
+                "required": ["path", "old_string", "new_string"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "run_command",
             "description": "Execute a shell command and capture stdout + stderr.",
             "parameters": {
@@ -158,6 +235,68 @@ def list_directory(path: str) -> str:
         return f"Error listing {p}: {exc}"
 
 
+def grep_search(pattern: str, path: str = ".", include: str = "*") -> str:
+    """Return matching lines with `file:lineno:` prefixes for a regex pattern."""
+    try:
+        compiled = re.compile(pattern)
+    except re.error as exc:
+        return f"Error: Invalid regex '{pattern}': {exc}"
+    root = Path(path).expanduser()
+    if not root.exists():
+        return f"Error: Path not found - {root}"
+    targets = [root] if root.is_file() else sorted(root.rglob(include))
+    matches = []
+    for target in targets:
+        if not target.is_file():
+            continue
+        try:
+            text = target.read_text(encoding="utf-8")
+        except Exception:
+            continue
+        for lineno, line in enumerate(text.splitlines(), start=1):
+            if compiled.search(line):
+                matches.append(f"{target}:{lineno}: {line.rstrip()}")
+    return "\n".join(matches) if matches else "No matches found."
+
+
+def diff(path_a: str, path_b: str) -> str:
+    """Return a unified diff between two files."""
+    a = Path(path_a).expanduser()
+    b = Path(path_b).expanduser()
+    try:
+        a_lines = a.read_text(encoding="utf-8").splitlines()
+    except Exception as exc:
+        return f"Error reading {a}: {exc}"
+    try:
+        b_lines = b.read_text(encoding="utf-8").splitlines()
+    except Exception as exc:
+        return f"Error reading {b}: {exc}"
+    unified = list(difflib.unified_diff(a_lines, b_lines, fromfile=str(a), tofile=str(b)))
+    return "\n".join(unified) if unified else "Files are identical."
+
+
+def edit_file(path: str, old_string: str, new_string: str, replace_all: bool = False) -> str:
+    """Replace an exact substring in a file, erroring on ambiguous matches."""
+    p = Path(path).expanduser()
+    if not p.is_file():
+        return f"Error: File not found - {p}"
+    try:
+        content = p.read_text(encoding="utf-8")
+    except Exception as exc:
+        return f"Error reading {p}: {exc}"
+    if old_string not in content:
+        return f"Error: old_string not found in {p}"
+    if not replace_all and content.count(old_string) > 1:
+        occurrences = content.count(old_string)
+        msg = f"occurrences of old_string in {p}; pass replace_all=true or include more context."
+        return f"Error: {occurrences} {msg}"
+    try:
+        p.write_text(content.replace(old_string, new_string), encoding="utf-8")
+    except Exception as exc:
+        return f"Error writing {p}: {exc}"
+    return f"Successfully edited {p}"
+
+
 _DANGEROUS_PATTERNS = [
     "rm -rf /", "rm -fr /", "rm -r /",
     ":(){ :|:& };:",
@@ -200,6 +339,12 @@ def execute_tool(name: str, args: Dict[str, Any]) -> str:
         return write_file(**args)
     if name == "list_directory":
         return list_directory(**args)
+    if name == "grep_search":
+        return grep_search(**args)
+    if name == "diff":
+        return diff(**args)
+    if name == "edit_file":
+        return edit_file(**args)
     if name == "run_command":
         return run_command(**args)
     return f"Unknown tool: {name}"
