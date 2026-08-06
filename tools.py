@@ -14,8 +14,6 @@ import subprocess
 from pathlib import Path
 from typing import Any, Dict, List
 
-from ddgs import DDGS
-
 TOOL_DEFINITIONS: List[Dict[str, Any]] = [
     {
         "type": "function",
@@ -186,6 +184,13 @@ TOOL_DEFINITIONS: List[Dict[str, Any]] = [
 
 def web_search(query: str) -> str:
     """Return top 5 DuckDuckGo results formatted as a human-readable string."""
+    try:
+        from ddgs import DDGS
+    except ImportError:
+        return (
+            "Web search is unavailable: the 'ddgs' package is not installed. "
+            "Install it with: pip install 'agenttool[search]'"
+        )
     results = []
     with DDGS() as ddg:
         for r in ddg.text(
