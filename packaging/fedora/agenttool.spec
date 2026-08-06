@@ -33,7 +33,9 @@ web search, file I/O, directory listing, and shell command execution.
 %license LICENSE
 %doc README.md
 %{_bindir}/agenttool
-%{python3_sitelib}/%{name}/
+%{python3_sitelib}/agent.py
+%{python3_sitelib}/tools.py
+%{python3_sitelib}/agenttool-%{version}.dist-info/
 
 %changelog
 * Tue Jul 21 2026 Aditya Anil <aditya.anil.productions@gmail.com> - 0.2.0-1
