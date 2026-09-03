@@ -16,9 +16,13 @@ import os
 import re
 import sys
 from pathlib import Path
-from typing import Any, Dict, List, Tuple
+from typing import Any
 
 import requests
+from prompt_toolkit import PromptSession
+from prompt_toolkit.formatted_text import FormattedText
+from prompt_toolkit.history import InMemoryHistory
+from prompt_toolkit.key_binding import KeyBindings
 from rich import box
 from rich.align import Align
 from rich.console import Console
@@ -27,10 +31,6 @@ from rich.markdown import Markdown
 from rich.panel import Panel
 from rich.prompt import Prompt
 from rich.table import Table
-from prompt_toolkit import PromptSession
-from prompt_toolkit.history import InMemoryHistory
-from prompt_toolkit.key_binding import KeyBindings
-from prompt_toolkit.formatted_text import FormattedText
 from rich.traceback import install as install_rich_traceback
 
 from tools import (
@@ -47,18 +47,18 @@ MAX_LOAD_MESSAGES = 50
 
 
 def _session_file_path() -> Path:
-    stamp = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    stamp = datetime.datetime.now(tz=datetime.timezone.utc).strftime("%Y-%m-%d_%H-%M-%S")
     SESSION_DIR.mkdir(parents=True, exist_ok=True)
     return SESSION_DIR / f"{stamp}.jsonl"
 
 
-def _save_message(file_path: Path, msg: Dict[str, Any]) -> None:
+def _save_message(file_path: Path, msg: dict[str, Any]) -> None:
     with file_path.open("a") as f:
         f.write(json.dumps(msg, ensure_ascii=False) + "\n")
 
 
-def _load_messages(file_path: Path) -> List[Dict[str, Any]]:
-    msgs: List[Dict[str, Any]] = []
+def _load_messages(file_path: Path) -> list[dict[str, Any]]:
+    msgs: list[dict[str, Any]] = []
     try:
         with file_path.open() as f:
             for line in f:
@@ -70,7 +70,7 @@ def _load_messages(file_path: Path) -> List[Dict[str, Any]]:
     return msgs[-MAX_LOAD_MESSAGES:] if msgs else []
 
 
-def _list_sessions() -> List[Path]:
+def _list_sessions() -> list[Path]:
     try:
         files = sorted(SESSION_DIR.glob("*.jsonl"), reverse=True)
     except OSError:
@@ -82,7 +82,7 @@ def _format_session_label(f: Path) -> str:
     return f.stem.replace("_", " ").replace("-", ":")
 
 
-def _pick_session(sessions: List[Path]) -> Path | None:
+def _pick_session(sessions: list[Path]) -> Path | None:
     if not sessions:
         return None
     if len(sessions) == 1:
@@ -105,7 +105,7 @@ def _pick_session(sessions: List[Path]) -> Path | None:
         console.print("[red]Invalid choice.[/]")
 
 
-def _fetch_ollama_models() -> List[Tuple[str, str, str]]:
+def _fetch_ollama_models() -> list[tuple[str, str, str]]:
     """
     Return a list of (display_name, model_id, base_url) for Ollama.
     """
@@ -113,7 +113,7 @@ def _fetch_ollama_models() -> List[Tuple[str, str, str]]:
     try:
         resp = requests.get(url, timeout=2)
         resp.raise_for_status()
-    except Exception:
+    except Exception:  # noqa: BLE001
         return []  # Ollama not running / unreachable
 
     data = resp.json()
@@ -124,7 +124,7 @@ def _fetch_ollama_models() -> List[Tuple[str, str, str]]:
     return models
 
 
-def _fetch_lmstudio_models() -> List[Tuple[str, str, str]]:
+def _fetch_lmstudio_models() -> list[tuple[str, str, str]]:
     """
     Return a list of (display_name, model_id, base_url) for LM Studio.
     """
@@ -132,7 +132,7 @@ def _fetch_lmstudio_models() -> List[Tuple[str, str, str]]:
     try:
         resp = requests.get(url, timeout=2)
         resp.raise_for_status()
-    except Exception:
+    except Exception:  # noqa: BLE001
         return []  # NOTE: LM Studio not running / unreachable
 
     data = resp.json()
@@ -144,14 +144,14 @@ def _fetch_lmstudio_models() -> List[Tuple[str, str, str]]:
     return models
 
 
-def discover_models() -> List[Tuple[str, str, str]]:
+def discover_models() -> list[tuple[str, str, str]]:
     """Combine Ollama and LM Studio model lists."""
     ollama = _fetch_ollama_models()
     lmstudio = _fetch_lmstudio_models()
     return ollama + lmstudio
 
 
-def _display_models(models: List[Tuple[str, str, str]]) -> None:
+def _display_models(models: list[tuple[str, str, str]]) -> None:
     table = Table(title="Discovered Local LLM Models", box=box.SIMPLE)
     table.add_column("#", justify="right")
     table.add_column("Model", overflow="fold")
@@ -160,7 +160,7 @@ def _display_models(models: List[Tuple[str, str, str]]) -> None:
     console.print(table)
 
 
-def pick_model(models: List[Tuple[str, str, str]]) -> Tuple[str, str, str]:
+def pick_model(models: list[tuple[str, str, str]]) -> tuple[str, str, str]:
     """Prompt the user to select a model; returns (display_name, model_id, base_url)."""
     while True:
         try:
@@ -180,7 +180,7 @@ def pick_model(models: List[Tuple[str, str, str]]) -> Tuple[str, str, str]:
         except KeyboardInterrupt:
             console.print("\n[bold red]Interrupted - exiting.[/]")
             sys.exit(0)
-        except Exception:
+        except Exception:  # noqa: BLE001
             console.print("[red]Please enter a valid number.[/]")
 
 
@@ -214,12 +214,12 @@ def _json_subtree(text: str) -> str | None:
                     try:
                         json.loads(candidate)
                         return candidate
-                    except Exception:
+                    except Exception:  # noqa: BLE001
                         break
     return None
 
 
-def _build_tool_call(namespace: str, args: Dict[str, Any]) -> Dict[str, Any]:
+def _build_tool_call(namespace: str, args: dict[str, Any]) -> dict[str, Any]:
     """Build a standardised tool call dict with a unique ID."""
     return {
         "id": f"call_{os.urandom(4).hex()}",
@@ -231,7 +231,7 @@ def _build_tool_call(namespace: str, args: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
-def robust_tool_parse(msg: Dict[str, Any]) -> List[Dict[str, Any]]:
+def robust_tool_parse(msg: dict[str, Any]) -> list[dict[str, Any]]:
     """
     Extracts tool calls from native parameters, raw JSON text blocks,
     or structural Pythonic functions seamlessly.
@@ -246,19 +246,17 @@ def robust_tool_parse(msg: Dict[str, Any]) -> List[Dict[str, Any]]:
     if content.startswith("INSTRUCTIONS:"):
         return []
 
-    tool_calls: List[Dict[str, Any]] = []
+    tool_calls: list[dict[str, Any]] = []
     clean_content = content.strip()
 
-    if clean_content.startswith("```json"):
-        clean_content = clean_content[7:]
-    if clean_content.endswith("```"):
-        clean_content = clean_content[:-3]
+    clean_content = clean_content.removeprefix("```json")
+    clean_content = clean_content.removesuffix("```")
     clean_content = clean_content.strip()
 
     json_str = clean_content
     try:
         json.loads(json_str)
-    except Exception:
+    except Exception:  # noqa: BLE001
         extracted = _json_subtree(clean_content)
         if extracted is not None:
             json_str = extracted
@@ -303,7 +301,7 @@ def robust_tool_parse(msg: Dict[str, Any]) -> List[Dict[str, Any]]:
                             _build_tool_call(fc["name"], params)
                         )
                         return tool_calls
-        except Exception:
+        except Exception:  # noqa: BLE001, S110
             pass
 
     for tool_name in ["web_search", "read_file", "write_file", "list_directory", "run_command"]:
@@ -315,7 +313,7 @@ def robust_tool_parse(msg: Dict[str, Any]) -> List[Dict[str, Any]]:
                 if args_str.startswith("{"):
                     try:
                         args_dict = json.loads(args_str)
-                    except Exception:
+                    except Exception:  # noqa: BLE001
                         args_dict = {}
                     if not isinstance(args_dict, dict):
                         args_dict = {}
@@ -374,8 +372,8 @@ def get_clean_stream_display(buffer: str) -> str:
 
 
 def _process_tool_calls(
-    calls: List[Dict[str, Any]],
-    messages: List[Dict[str, Any]],
+    calls: list[dict[str, Any]],
+    messages: list[dict[str, Any]],
 ) -> None:
     """Execute each tool call and feed the result back into the message list."""
     for call in calls:
@@ -386,7 +384,7 @@ def _process_tool_calls(
         if isinstance(args_raw, str):
             try:
                 args = json.loads(args_raw)
-            except Exception:
+            except Exception:  # noqa: BLE001
                 args = {}
         else:
             args = args_raw
@@ -400,7 +398,7 @@ def _process_tool_calls(
         )
         try:
             tool_output = execute_tool(name, args)
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             tool_output = f"Error executing tool {name}: {exc}"
         console.print(Panel(f"[bold]Result:[/]\n{tool_output}", style="green"))
         messages.append(
@@ -416,7 +414,7 @@ def _process_tool_calls(
 def _call_model(
     client: Any,
     model_name: str,
-    messages: List[Dict[str, Any]],
+    messages: list[dict[str, Any]],
     max_iters: int = 10,
     sess_file: Path | None = None,
 ) -> str | None:
@@ -440,7 +438,7 @@ def _call_model(
         )
 
         content_buffer = ""
-        tool_call_buffers: Dict[int, Dict[str, str]] = {}
+        tool_call_buffers: dict[int, dict[str, str]] = {}
 
         with Live(console=console, refresh_per_second=20) as live:
             live.update(
@@ -492,12 +490,12 @@ def _call_model(
                                 tc.function.arguments
                             )
 
-        msg: Dict[str, Any] = {"role": "assistant"}
+        msg: dict[str, Any] = {"role": "assistant"}
         if content_buffer:
             msg["content"] = content_buffer
 
         if tool_call_buffers:
-            tool_calls_list: List[Dict[str, Any]] = []
+            tool_calls_list: list[dict[str, Any]] = []
             for idx in sorted(tool_call_buffers):
                 tc = tool_call_buffers[idx]
                 tool_calls_list.append(
@@ -562,7 +560,7 @@ def run_agent_loop(
       · Ctrl+W              delete the last word
       · Mouse click        position the cursor
     """
-    messages: List[Dict[str, Any]] = [
+    messages: list[dict[str, Any]] = [
         {"role": "system", "content": system_prompt},
     ]
 
@@ -711,7 +709,7 @@ def main() -> None:
     console.print(f"Selected model: [green]{model_name}[/]")
     client = create_openai_client(base_url)
 
-    current_date_str = datetime.datetime.now().strftime("%A, %B %d, %Y")
+    current_date_str = datetime.datetime.now(tz=datetime.timezone.utc).strftime("%A, %B %d, %Y")
 
     system_prompt = (
         f"You are an autonomous AI agent with live internet access. Today's date is {current_date_str}.\n\n"

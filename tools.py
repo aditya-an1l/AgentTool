@@ -12,9 +12,9 @@ import difflib
 import re
 import subprocess
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any
 
-TOOL_DEFINITIONS: List[Dict[str, Any]] = [
+TOOL_DEFINITIONS: list[dict[str, Any]] = [
     {
         "type": "function",
         "function": {
@@ -209,7 +209,7 @@ def read_file(path: str) -> str:
         return f"Error: File not found - {p}"
     try:
         return p.read_text(encoding="utf-8")
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001
         return f"Error reading {p}: {exc}"
 
 
@@ -220,7 +220,7 @@ def write_file(path: str, content: str) -> str:
         p.parent.mkdir(parents=True, exist_ok=True)
         p.write_text(content, encoding="utf-8")
         return f"Successfully wrote to {p}"
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001
         return f"Error writing {p}: {exc}"
 
 
@@ -236,7 +236,7 @@ def list_directory(path: str) -> str:
             suffix = "/" if e.is_dir() else ""
             lines.append(f"{e.name}{suffix}")
         return "\n".join(lines) if lines else "Directory is empty."
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001
         return f"Error listing {p}: {exc}"
 
 
@@ -256,7 +256,7 @@ def grep_search(pattern: str, path: str = ".", include: str = "*") -> str:
             continue
         try:
             text = target.read_text(encoding="utf-8")
-        except Exception:
+        except Exception:  # noqa: BLE001, S112
             continue
         for lineno, line in enumerate(text.splitlines(), start=1):
             if compiled.search(line):
@@ -270,11 +270,11 @@ def diff(path_a: str, path_b: str) -> str:
     b = Path(path_b).expanduser()
     try:
         a_lines = a.read_text(encoding="utf-8").splitlines()
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001
         return f"Error reading {a}: {exc}"
     try:
         b_lines = b.read_text(encoding="utf-8").splitlines()
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001
         return f"Error reading {b}: {exc}"
     unified = list(difflib.unified_diff(a_lines, b_lines, fromfile=str(a), tofile=str(b)))
     return "\n".join(unified) if unified else "Files are identical."
@@ -287,7 +287,7 @@ def edit_file(path: str, old_string: str, new_string: str, replace_all: bool = F
         return f"Error: File not found - {p}"
     try:
         content = p.read_text(encoding="utf-8")
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001
         return f"Error reading {p}: {exc}"
     if old_string not in content:
         return f"Error: old_string not found in {p}"
@@ -297,7 +297,7 @@ def edit_file(path: str, old_string: str, new_string: str, replace_all: bool = F
         return f"Error: {occurrences} {msg}"
     try:
         p.write_text(content.replace(old_string, new_string), encoding="utf-8")
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001
         return f"Error writing {p}: {exc}"
     return f"Successfully edited {p}"
 
@@ -322,6 +322,7 @@ def run_command(command: str) -> str:
             capture_output=True,
             text=True,
             timeout=30,
+            check=False,
         )
         out = completed.stdout.strip()
         err = completed.stderr.strip()
@@ -330,11 +331,11 @@ def run_command(command: str) -> str:
         return out or "(no output)"
     except subprocess.TimeoutExpired:
         return "Error: Command timed out after 30 seconds."
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001
         return f"Error executing command: {exc}"
 
 
-def execute_tool(name: str, args: Dict[str, Any]) -> str:
+def execute_tool(name: str, args: dict[str, Any]) -> str:
     """Map a tool name to its implementation and return the result."""
     if name == "web_search":
         return web_search(**args)
