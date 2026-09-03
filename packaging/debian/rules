@@ -1,0 +1,8 @@
+#!/usr/bin/make -f
+%:
+	dh $@ --with python3 --buildsystem=pybuild
+
+override_dh_auto_install:
+	dh_auto_install
+	install -Dm755 agent.py debian/agenttool/usr/bin/agenttool
+	install -Dm644 LICENSE debian/agenttool/usr/share/doc/agenttool/copyright

@@ -7,9 +7,8 @@ from __future__ import annotations
 import json
 import sys
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any
 from unittest.mock import MagicMock, patch
-
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
@@ -81,7 +80,7 @@ class TestDiscoverModels:
 
 class TestRobustToolParse:
     def test_returns_official_tool_calls(self) -> None:
-        msg: Dict[str, Any] = {
+        msg: dict[str, Any] = {
             "tool_calls": [
                 {
                     "id": "call_1",
@@ -94,7 +93,7 @@ class TestRobustToolParse:
         assert result == msg["tool_calls"]
 
     def test_fallback_json_in_content(self) -> None:
-        msg: Dict[str, Any] = {
+        msg: dict[str, Any] = {
             "content": 'Some text {"name": "web_search", "arguments": {"query": "hello"}} more text'
         }
         result = robust_tool_parse(msg)
@@ -105,20 +104,20 @@ class TestRobustToolParse:
         assert args == {"query": "hello"}
 
     def test_no_json_returns_empty_list(self) -> None:
-        msg: Dict[str, Any] = {"content": "Just a plain text reply."}
+        msg: dict[str, Any] = {"content": "Just a plain text reply."}
         assert robust_tool_parse(msg) == []
 
     def test_empty_message_returns_empty(self) -> None:
         assert robust_tool_parse({}) == []
 
     def test_missing_arguments_in_json_fallback(self) -> None:
-        msg: Dict[str, Any] = {
+        msg: dict[str, Any] = {
             "content": '{"name": "web_search"}'  # missing "arguments"
         }
         assert robust_tool_parse(msg) == []
 
     def test_fallback_func_name_parens(self) -> None:
-        msg: Dict[str, Any] = {
+        msg: dict[str, Any] = {
             "content": 'web_search({"query": "current president of India"})'
         }
         result = robust_tool_parse(msg)
@@ -129,7 +128,7 @@ class TestRobustToolParse:
         assert args == {"query": "current president of India"}
 
     def test_fallback_tool_invocation(self) -> None:
-        msg: Dict[str, Any] = {
+        msg: dict[str, Any] = {
             "content": '{"toolInvocation": "web_search", "functionCall": {"name": "web_search", "parameters": {"query": "owner of this model"}}}'
         }
         result = robust_tool_parse(msg)
@@ -140,7 +139,7 @@ class TestRobustToolParse:
         assert args == {"query": "owner of this model"}
 
     def test_fallback_tool_invocation_list_wrapped(self) -> None:
-        msg: Dict[str, Any] = {
+        msg: dict[str, Any] = {
             "content": '[{"toolInvocation": "web_search", "functionCall": {"name": "web_search", "parameters": {"query": "test"}}}]'
         }
         result = robust_tool_parse(msg)
@@ -150,7 +149,7 @@ class TestRobustToolParse:
         assert args == {"query": "test"}
 
     def test_fallback_code_style_colon(self) -> None:
-        msg: Dict[str, Any] = {
+        msg: dict[str, Any] = {
             "content": 'web_search(query: "who is the president of France")'
         }
         result = robust_tool_parse(msg)
@@ -160,7 +159,7 @@ class TestRobustToolParse:
         assert args == {"query": "who is the president of France"}
 
     def test_fallback_code_style_equals(self) -> None:
-        msg: Dict[str, Any] = {
+        msg: dict[str, Any] = {
             "content": 'read_file(path="test.txt")'
         }
         result = robust_tool_parse(msg)

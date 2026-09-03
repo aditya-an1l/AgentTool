@@ -20,6 +20,9 @@
     <a href="https://github.com/aditya-an1l/AgentTool/issues">
       <img alt="Issues" src="https://img.shields.io/github/issues/aditya-an1l/AgentTool?style=for-the-badge&logo=gitbook&color=FF4136&logoColor=FFFFFF&labelColor=000000" />
     </a>
+    <a href="https://github.com/aditya-an1l/AgentTool/actions/workflows/ci.yml">
+      <img alt="CI" src="https://img.shields.io/github/actions/workflow/status/aditya-an1l/AgentTool/ci.yml?branch=main&style=for-the-badge&logo=githubactions&logoColor=FFFFFF&labelColor=000000&color=1DA1F2" />
+    </a>
     <a href="https://github.com/aditya-an1l/AgentTool">
       <img alt="Repo Size" src="https://img.shields.io/github/repo-size/aditya-an1l/AgentTool?color=1DA1F2&label=SIZE&logo=files&style=for-the-badge&logoColor=FFFFFF&labelColor=000000" />
     </a>
